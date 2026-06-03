@@ -1,6 +1,6 @@
 {
   "name": "DavidSTORE",
   "description": "Une application de commerce électronique professionnelle pour DavidSTORE.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["geolocation", "camera", "web-share"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

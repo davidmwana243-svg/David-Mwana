@@ -7,7 +7,7 @@ export interface OrderItem {
   imageUrl: string;
 }
 
-export type OrderStatus = 'processing' | 'shipped' | 'delivered' | 'cancelled';
+export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
 
 export interface Order {
   id?: string;
@@ -21,8 +21,9 @@ export interface Order {
     city: string;
     phone: string;
   };
-  paymentMethod: string;
   trackingNumber?: string;
+  paymentMethod?: string;
+  paymentStatus?: 'pending' | 'paid' | 'failed';
   createdAt: number;
   updatedAt: number;
 }

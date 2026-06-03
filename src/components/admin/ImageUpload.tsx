@@ -35,23 +35,58 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({ currentImageUrl, onIma
     };
     reader.readAsDataURL(file);
 
-    // Upload to Firebase
+    // Upload to Firebase / Local Server Hybrid
     setUploading(true);
     setError(null);
     setSuccess(false);
 
     try {
       const timestamp = Date.now();
-      const storageRef = ref(storage, `products/${productId}/${timestamp}_${file.name}`);
-      
-      // 60s timeout race
-      const uploadPromise = uploadBytes(storageRef, file);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Le délai de téléchargement a expiré (60s). Vérifiez votre connexion ou assurez-vous que Firebase Storage est activé dans votre console Firebase.')), 60000)
-      );
-      
-      await Promise.race([uploadPromise, timeoutPromise]);
-      const downloadUrl = await getDownloadURL(storageRef);
+      let downloadUrl = '';
+
+      // Try uploading to our local server first (extremely fast and doesn't depend on external Firebase activation)
+      try {
+        const fileToBase64 = (f: File): Promise<string> => {
+          return new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.readAsDataURL(f);
+            r.onload = () => resolve(r.result as string);
+            r.onerror = error => reject(error);
+          });
+        };
+
+        const base64Image = await fileToBase64(file);
+        const serverRes = await fetch('/api/upload', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            image: base64Image,
+            fileName: `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+          })
+        });
+
+        if (serverRes.ok) {
+          const data = await serverRes.json();
+          downloadUrl = data.imageUrl;
+          console.log("Local server upload succeeded:", downloadUrl);
+        } else {
+          throw new Error("Server returned non-OK status");
+        }
+      } catch (serverErr) {
+        console.warn("Failed to upload to local backend, falling back to Firebase Storage:", serverErr);
+        
+        // Fallback to Firebase Storage
+        const storageRef = ref(storage, `products/${productId}/${timestamp}_${file.name}`);
+        const uploadPromise = uploadBytes(storageRef, file);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Le délai de téléchargement a expiré (60s). Vérifiez votre connexion ou assurez-vous que Firebase Storage est activé dans votre console Firebase.')), 15000)
+        );
+        
+        await Promise.race([uploadPromise, timeoutPromise]);
+        downloadUrl = await getDownloadURL(storageRef);
+      }
       
       onImageUploaded(downloadUrl);
       setUrlInput(downloadUrl);

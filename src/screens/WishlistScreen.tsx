@@ -37,6 +37,14 @@ export const WishlistScreen: React.FC = () => {
     fetchWishlistItems();
   }, [profile?.wishlist]);
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/home');
+    }
+  };
+
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
@@ -58,7 +66,7 @@ export const WishlistScreen: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <div className="bg-white px-4 py-3 shadow-sm sticky top-0 z-10 border-b border-gray-100 flex items-center">
-        <button onClick={() => navigate(-1)} className="mr-3">
+        <button onClick={handleBack} className="mr-3">
           <ArrowLeft className="w-6 h-6 text-gray-800" />
         </button>
         <h1 className="text-lg font-bold text-gray-900 flex-1 text-center pr-9">Liste de souhaits</h1>
@@ -83,7 +91,7 @@ export const WishlistScreen: React.FC = () => {
             <h2 className="text-lg font-bold text-gray-900 mb-1">Aucun article trouvé</h2>
             <p className="text-gray-500 mb-6 px-10">Vous n'avez pas encore ajouté d'articles à votre liste de souhaits.</p>
             <button 
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/home')}
               className="text-orange-500 font-bold"
             >
               Découvrir des produits

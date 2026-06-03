@@ -7,7 +7,14 @@ import { EX_PRODUCTS, EX_CATEGORIES } from './mockData';
 export const getProducts = async (): Promise<Product[]> => {
   try {
     const snapshot = await getDocs(collection(db, 'products'));
-    if (snapshot.empty) return EX_PRODUCTS;
+    if (snapshot.empty) {
+      if (localStorage.getItem('database_seeded') === 'true') {
+        return []; // Truly empty, user deleted everything or cleared the catalog
+      }
+      return EX_PRODUCTS;
+    }
+    // Since there are items in Firestore, the database is active and seeded
+    localStorage.setItem('database_seeded', 'true');
     const prods = snapshot.docs.map(doc => doc.data() as Product);
     return prods.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   } catch (error) {
@@ -102,4 +109,69 @@ export const searchProducts = async (queryText: string): Promise<Product[]> => {
     p.name.toLowerCase().includes(lowerQuery) || 
     p.description.toLowerCase().includes(lowerQuery)
   );
+};
+
+export interface ProductReview {
+  id: string;
+  productId: string;
+  userId: string;
+  userName: string;
+  rating: number;
+  comment: string;
+  createdAt: number;
+}
+
+export const getProductReviews = async (productId: string): Promise<ProductReview[]> => {
+  try {
+    const q = query(collection(db, 'reviews'), where('productId', '==', productId));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      return [];
+    }
+    return snap.docs.map(doc => doc.data() as ProductReview);
+  } catch (error) {
+    return [];
+  }
+};
+
+export const addProductReview = async (productId: string, userId: string, userName: string, rating: number, comment: string): Promise<ProductReview> => {
+  const reviewsCol = collection(db, 'reviews');
+  const newReviewRef = doc(reviewsCol);
+  
+  const review: ProductReview = {
+    id: newReviewRef.id,
+    productId,
+    userId,
+    userName,
+    rating,
+    comment,
+    createdAt: Date.now()
+  };
+  
+  await setDoc(newReviewRef, review);
+  
+  // Update the product's overall rating average dynamically
+  try {
+    const productRef = doc(db, 'products', productId);
+    const pSnap = await getDoc(productRef);
+    if (pSnap.exists()) {
+      const pData = pSnap.data() as Product;
+      const currentRatingCount = pData.reviewsCount || 0;
+      const oldRating = pData.rating || 0;
+      
+      let newAverage = rating;
+      if (currentRatingCount > 0) {
+        newAverage = parseFloat(((oldRating * currentRatingCount + rating) / (currentRatingCount + 1)).toFixed(1));
+      }
+      
+      await updateDoc(productRef, {
+        rating: newAverage,
+        reviewsCount: currentRatingCount + 1
+      });
+    }
+  } catch (err) {
+    console.warn("Could not calculate and update average rating in DB, ignoring", err);
+  }
+  
+  return review;
 };

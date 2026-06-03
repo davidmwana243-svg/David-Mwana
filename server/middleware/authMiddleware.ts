@@ -19,11 +19,17 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
       const decodedToken = await admin.auth().verifyIdToken(token);
       (req as any).user = decodedToken;
       return next();
-    } catch (firebaseError) {
+    } catch (firebaseError: any) {
       // If Firebase verification fails, try custom JWT if applicable
-      const decodedUser = jwt.verify(token, JWT_SECRET);
-      (req as any).user = decodedUser;
-      return next();
+      try {
+        const decodedUser = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+        (req as any).user = decodedUser;
+        return next();
+      } catch (jwtError) {
+        console.error('Firebase Token error:', firebaseError);
+        console.error('JWT verification error:', jwtError);
+        return res.status(403).json({ message: 'Invalid or expired token', error: firebaseError.message });
+      }
     }
   } catch (error) {
     console.error('Token verification error:', error);

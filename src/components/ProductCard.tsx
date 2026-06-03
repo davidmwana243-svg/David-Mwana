@@ -25,16 +25,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         <div className="mt-auto">
           <div className="flex items-center space-x-1 mb-1">
             <span className="text-orange-500 text-lg font-bold">
-              {product.price.toFixed(2)} FC
+              {Number(product.price || 0).toLocaleString()} FC
             </span>
           </div>
           
-          <div className="flex items-center text-xs text-gray-500">
-            <Star className="w-3 h-3 fill-orange-400 text-orange-400 mr-1" />
-            <span>{product.rating}</span>
-            <span className="mx-1">•</span>
-            <span>{product.salesCount.toLocaleString()} sold</span>
-          </div>
+          {/* Sales count removed per user request */}
         </div>
       </div>
     </Link>

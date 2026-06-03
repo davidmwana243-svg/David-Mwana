@@ -13,6 +13,9 @@ export const AdminProductsScreen: React.FC = () => {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   
   // Form State
   const [name, setName] = useState('');
@@ -137,10 +140,19 @@ export const AdminProductsScreen: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Voulez-vous vraiment supprimer ce produit ?')) {
-      await deleteProduct(id);
+  const confirmDelete = async () => {
+    if (!productToDelete) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteProduct(productToDelete.id);
+      setProductToDelete(null);
       fetchProducts();
+    } catch (error: any) {
+      console.error("handleDelete error:", error);
+      setDeleteError("Erreur lors de la suppression : " + (error.message || "Erreur inconnue"));
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -213,19 +225,19 @@ export const AdminProductsScreen: React.FC = () => {
                         {categories.find(c => c.id === product.category)?.name || product.category}
                       </span>
                     </td>
-                    <td className="px-6 py-4 font-medium text-gray-900">{product.price.toFixed(2)} FC</td>
+                    <td className="px-6 py-4 font-medium text-gray-900">{Number(product.price || 0).toLocaleString()} FC</td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${product.stock > 10 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                         {product.stock} en stock
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-gray-500">{product.salesCount.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-gray-500">{(product.salesCount || 0).toLocaleString()}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end space-x-2">
                         <button onClick={() => handleOpenEdit(product)} className="p-2 text-gray-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-blue-50">
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleDelete(product.id)} className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-lg hover:bg-red-50">
+                        <button onClick={() => setProductToDelete(product)} className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-lg hover:bg-red-50">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -290,6 +302,42 @@ export const AdminProductsScreen: React.FC = () => {
                 {editingProduct ? 'Mettre à jour' : 'Ajouter'}
               </Button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {productToDelete && (
+        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-xs flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 relative animate-in zoom-in-95 duration-150">
+            <h3 className="text-lg font-black text-gray-950 mb-2">Confirmer la suppression</h3>
+            <p className="text-gray-600 text-sm leading-relaxed mb-5">
+              Êtes-vous sûr de vouloir supprimer le produit <strong className="text-gray-950 font-bold">{productToDelete.name}</strong> ? Cette opération est définitive.
+            </p>
+            {deleteError && (
+              <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-xl text-xs font-semibold border border-red-100">
+                {deleteError}
+              </div>
+            )}
+            <div className="flex items-center justify-end space-x-3">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setProductToDelete(null);
+                  setDeleteError(null);
+                }}
+                disabled={isDeleting}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 border border-gray-200"
+              >
+                Annuler
+              </Button>
+              <Button 
+                onClick={confirmDelete}
+                isLoading={isDeleting}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-xl transition-all shadow-md shadow-red-200 active:scale-[0.98]"
+              >
+                Supprimer
+              </Button>
+            </div>
           </div>
         </div>
       )}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Minus, Plus, Trash2, ArrowLeft } from 'lucide-react';
+import { Minus, Plus, Trash2, ArrowLeft, ShoppingCart } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 
@@ -9,6 +9,14 @@ export const CartScreen: React.FC = () => {
   const { items, updateQuantity, removeFromCart, totalPrice, totalItems } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
+  
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/home');
+    }
+  };
 
   const handleCheckout = () => {
     if (!user) {
@@ -26,7 +34,7 @@ export const CartScreen: React.FC = () => {
         </div>
         <h2 className="text-xl font-bold text-gray-900 mb-2">Votre panier est vide</h2>
         <p className="text-gray-500 mb-8">On dirait que vous n'avez encore rien ajouté.</p>
-        <Button onClick={() => navigate('/')} className="w-full">Commencer les achats</Button>
+        <Button onClick={() => navigate('/home')} className="w-full">Commencer les achats</Button>
       </div>
     );
   }
@@ -34,7 +42,7 @@ export const CartScreen: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-gray-50">
       <div className="bg-white p-4 shadow-sm flex items-center sticky top-0 z-10">
-        <button onClick={() => navigate(-1)} className="mr-3">
+        <button onClick={handleBack} className="mr-3">
           <ArrowLeft className="w-6 h-6 text-gray-800" />
         </button>
         <h1 className="text-lg font-bold text-gray-900 flex-1 text-center pr-9">Panier ({totalItems})</h1>
@@ -54,7 +62,7 @@ export const CartScreen: React.FC = () => {
                 <p className="text-xs text-gray-500 mt-1">{item.product.category}</p>
               </div>
               <div className="flex items-center justify-between mt-2">
-                <span className="text-orange-500 font-bold">{item.product.price.toFixed(2)} FC</span>
+                <span className="text-orange-500 font-bold">{Number(item.product.price || 0).toLocaleString()} FC</span>
                 <div className="flex items-center bg-gray-100 rounded-lg">
                   <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)} className="p-1.5 text-gray-600">
                     {item.quantity === 1 ? <Trash2 className="w-4 h-4 text-red-500" /> : <Minus className="w-4 h-4" />}
@@ -74,8 +82,12 @@ export const CartScreen: React.FC = () => {
         <div className="flex justify-between items-center mb-4">
           <span className="text-gray-600 font-medium">Sélection totale</span>
           <div className="flex flex-col items-end">
-            <span className="text-2xl font-bold text-orange-500">{totalPrice.toFixed(2)} FC</span>
-            <span className="text-xs text-green-600 font-medium mt-0.5">Livraison gratuite appliquée</span>
+            <span className="text-2xl font-bold text-orange-500">{Number(totalPrice || 0).toLocaleString()} FC</span>
+            {totalPrice >= 50000 ? (
+              <span className="text-xs text-green-600 font-medium mt-0.5">Livraison gratuite offerte</span>
+            ) : (
+              <span className="text-xs text-blue-600 font-medium mt-0.5">Livraison 3000 FC applicable</span>
+            )}
           </div>
         </div>
         <Button onClick={handleCheckout} className="w-full py-4 text-lg font-bold rounded-xl shadow-lg shadow-orange-500/40">
@@ -85,6 +97,3 @@ export const CartScreen: React.FC = () => {
     </div>
   );
 };
-
-// Simple proxy for ShoppingCart icon up top
-import { ShoppingCart } from 'lucide-react';

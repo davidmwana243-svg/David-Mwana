@@ -23,9 +23,18 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Load items when user changes
   useEffect(() => {
-    const cartKey = user ? `cart_${user.uid}` : 'cart_guest';
-    const saved = localStorage.getItem(cartKey);
-    setItems(saved ? JSON.parse(saved) : []);
+    try {
+      const cartKey = user ? `cart_${user.uid}` : 'cart_guest';
+      const saved = localStorage.getItem(cartKey);
+      if (saved) {
+        setItems(JSON.parse(saved));
+      } else {
+        setItems([]);
+      }
+    } catch (error) {
+      console.error("Failed to parse cart from local storage", error);
+      setItems([]);
+    }
     setIsInitialized(true);
   }, [user]);
 
@@ -36,7 +45,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(cartKey, JSON.stringify(items));
   }, [items, user, isInitialized]);
 
-  const addToCart = (product: Product, quantity = 1) => {
+  const addToCart = React.useCallback((product: Product, quantity = 1) => {
     setItems(current => {
       const existing = current.find(item => item.product.id === product.id);
       if (existing) {
@@ -48,13 +57,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return [...current, { product, quantity }];
     });
-  };
+  }, []);
 
-  const removeFromCart = (productId: string) => {
+  const removeFromCart = React.useCallback((productId: string) => {
     setItems(current => current.filter(item => item.product.id !== productId));
-  };
+  }, []);
 
-  const updateQuantity = (productId: string, quantity: number) => {
+  const updateQuantity = React.useCallback((productId: string, quantity: number) => {
     if (quantity <= 0) {
       removeFromCart(productId);
       return;
@@ -64,15 +73,25 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         item.product.id === productId ? { ...item, quantity } : item
       )
     );
-  };
+  }, [removeFromCart]);
 
-  const clearCart = () => setItems([]);
+  const clearCart = React.useCallback(() => setItems([]), []);
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
 
+  const value = React.useMemo(() => ({ 
+    items, 
+    addToCart, 
+    removeFromCart, 
+    updateQuantity, 
+    clearCart, 
+    totalItems, 
+    totalPrice 
+  }), [items, totalItems, totalPrice]);
+
   return (
-    <CartContext.Provider value={{ items, addToCart, removeFromCart, updateQuantity, clearCart, totalItems, totalPrice }}>
+    <CartContext.Provider value={value}>
       {children}
     </CartContext.Provider>
   );

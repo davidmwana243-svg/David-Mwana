@@ -1,4 +1,5 @@
-import { createApp } from './app.js';
+import 'dotenv/config';
+import { createApp } from './app';
 
 async function startServer() {
   try {

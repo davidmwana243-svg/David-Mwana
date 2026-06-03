@@ -1,10 +1,8 @@
 import { Request, Response } from 'express';
-import admin from 'firebase-admin';
+import { getDb } from '../firebase/index.js';
 import { Order, OrderStatus } from '../models/orderModel.js';
 
 const ORDERS_COLLECTION = 'orders';
-
-const getDb = () => admin.firestore();
 
 export const createOrder = async (req: Request, res: Response) => {
   try {
@@ -22,7 +20,6 @@ export const createOrder = async (req: Request, res: Response) => {
       total: orderData.total || 0,
       status: 'processing',
       shippingAddress: orderData.shippingAddress!,
-      paymentMethod: orderData.paymentMethod || 'COD',
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };

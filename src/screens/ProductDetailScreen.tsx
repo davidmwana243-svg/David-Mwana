@@ -4,15 +4,18 @@ import { Product } from '../models/types';
 import { getProductById } from '../services/productService';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import { ArrowLeft, ShoppingCart, Star, Heart, Share2 } from 'lucide-react';
+import { useNotification } from '../contexts/NotificationContext';
+import { ArrowLeft, ShoppingCart, Heart, Share2 } from 'lucide-react';
 import { Button } from '../components/Button';
 
 export const ProductDetailScreen: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
   const { addToCart } = useCart();
-  const { profile, toggleWishlist } = useAuth();
+  const { profile, toggleWishlist, user } = useAuth();
+  const { showNotification } = useNotification();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -36,7 +39,7 @@ export const ProductDetailScreen: React.FC = () => {
 
   const handleAddToCart = () => {
     addToCart(product, 1);
-    navigate('/cart');
+    showNotification("Panier", "Produit ajouté au panier avec succès.", "success");
   };
 
   const isFavorited = profile?.wishlist?.includes(product.id) || false;
@@ -45,12 +48,12 @@ export const ProductDetailScreen: React.FC = () => {
     if (window.history.length > 1) {
       navigate(-1);
     } else {
-      navigate('/');
+      navigate('/home');
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 pb-32 relative">
+    <div className="flex flex-col min-h-screen bg-gray-50 pb-44 relative">
       {/* Header */}
       <div className="fixed top-0 w-full max-w-md flex justify-between p-4 z-10 left-1/2 -translate-x-1/2">
         <button onClick={handleBack} className="w-10 h-10 bg-white/80 backdrop-blur rounded-full flex items-center justify-center shadow-sm">
@@ -74,7 +77,7 @@ export const ProductDetailScreen: React.FC = () => {
       {/* Details Info */}
       <div className="bg-white px-4 py-5 mb-2 shadow-sm rounded-t-3xl -mt-6 relative z-10">
         <div className="flex items-end space-x-2 mb-2">
-          <span className="text-3xl font-bold text-orange-500">{product.price.toFixed(2)} FC</span>
+          <span className="text-3xl font-bold text-orange-500">{Number(product.price || 0).toLocaleString()} FC</span>
         </div>
         
         <h1 className="text-lg font-bold text-gray-900 leading-tight mb-3">
@@ -82,12 +85,7 @@ export const ProductDetailScreen: React.FC = () => {
         </h1>
 
         <div className="flex items-center justify-between text-sm text-gray-500">
-          <div className="flex items-center space-x-1">
-            <Star className="w-4 h-4 text-orange-400 fill-orange-400" />
-            <span className="font-medium text-gray-800">{product.rating}</span>
-            <span>({product.reviewsCount} avis)</span>
-          </div>
-          <div>{product.salesCount.toLocaleString()} vendus</div>
+          {/* Sales count removed per user request */}
         </div>
       </div>
 
@@ -99,8 +97,10 @@ export const ProductDetailScreen: React.FC = () => {
         </p>
       </div>
 
+      <div className="h-10" />
+
       {/* Bottom Action Bar */}
-      <div className="fixed bottom-0 w-full max-w-md bg-white border-t border-gray-100 px-4 pt-4 pb-8 flex items-center space-x-3 z-50 shadow-[0_-8px_20px_rgba(0,0,0,0.08)] rounded-t-2xl left-1/2 -translate-x-1/2">
+      <div className="fixed bottom-0 w-full max-w-md bg-white border-t border-gray-100 px-4 pt-4 pb-10 flex items-center space-x-3 z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.12)] rounded-t-[32px] left-1/2 -translate-x-1/2">
         <button 
           onClick={async () => {
             if (!profile) navigate('/login');

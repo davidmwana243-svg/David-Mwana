@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "DavidSTORE",
+    "slug": "davidstore",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "/icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.david.davidstore"
+    },
+    "web": {
+      "favicon": "/icon.png"
+    }
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Information about the registered user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "phone": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "wishlist": { "type": "array" },
+        "addresses": { "type": "array" },
+        "createdAt": { "type": "number" },
+        "preferredPaymentMethod": { "type": "string" },
+        "paymentPhone": { "type": "string" }
+      },
+      "required": ["id", "email", "displayName"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Store product items.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "imageUrl": { "type": "string" },
+        "images": { "type": "array" },
+        "category": { "type": "string" },
+        "rating": { "type": "number" },
+        "reviewsCount": { "type": "number" },
+        "stock": { "type": "number" },
+        "salesCount": { "type": "number" },
+        "createdAt": { "type": "number" }
+      }
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer orders.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "items": { "type": "array" },
+        "total": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "shippingAddress": { "type": "object" },
+        "paymentMethod": { "type": "string" },
+        "paymentPhone": { "type": "string" },
+        "qrToken": { "type": "string" }
+      }
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Product categories.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "icon": { "type": "string" },
+        "imageUrl": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile documents."
+    },
+    "products/{productId}": {
+      "schema": "Product",
+      "description": "Product catalog."
+    },
+    "categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Product categories."
+    },
+    "orders/{orderId}": {
+      "schema": "Order",
+      "description": "Customer orders."
+    }
+  }
+}
