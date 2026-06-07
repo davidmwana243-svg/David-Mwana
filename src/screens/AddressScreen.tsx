@@ -98,9 +98,11 @@ export const AddressScreen: React.FC = () => {
           const response = await fetch(url);
           
           if (response.ok) {
-            const data = await response.json();
-            if (data && data.address) {
-              const addr = data.address;
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+              const data = await response.json();
+              if (data && data.address) {
+                const addr = data.address;
               
               // 1. Identify City
               const rawCity = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
@@ -161,6 +163,7 @@ export const AddressScreen: React.FC = () => {
                 fetchedFields.houseNumber = addr.house_number;
               }
             }
+            } // close if contentType
           }
         } catch (apiErr) {
           console.error("Geocoding API error:", apiErr);

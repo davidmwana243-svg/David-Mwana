@@ -7,6 +7,7 @@ import { createServer as createViteServer } from 'vite';
 
 import { errorHandler } from './server/middleware/errorHandler';
 import { initializeFirebaseAdmin } from './server/firebase/index';
+import { startNotificationListeners } from './server/services/notificationService';
 import authRoutes from './server/routes/authRoutes';
 import orderRoutes from './server/routes/orderRoutes';
 import aiRoutes from './server/routes/aiRoutes';
@@ -16,8 +17,14 @@ import paymentRoutes from './server/routes/paymentRoutes';
 export async function createApp() {
   const app = express();
 
+  // Trust front-facing proxies (Cloud Run GFE) to ensure req.protocol is correctly 'https'
+  app.set('trust proxy', true);
+
   // Initialize Firebase Admin SDK
   initializeFirebaseAdmin();
+
+  // Start background FCM Firestore triggers
+  startNotificationListeners();
 
   // Basic middleware
   app.use(helmet({

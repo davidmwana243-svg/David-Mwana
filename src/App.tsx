@@ -20,6 +20,19 @@ import { ChatAssistantScreen } from './screens/ChatAssistantScreen';
 import { WelcomeScreen } from './screens/WelcomeScreen';
 import { AddressScreen } from './screens/AddressScreen';
 import { CatalogScreen } from './screens/CatalogScreen';
+import { MaintenanceScreen } from './screens/MaintenanceScreen';
+
+const MaintenanceWrapper = ({ children }: { children: React.ReactNode }) => {
+  const { maintenanceMode, isAdmin, loading } = useAuth();
+  
+  if (loading) return null;
+  
+  if (maintenanceMode && !isAdmin) {
+    return <MaintenanceScreen />;
+  }
+  
+  return <>{children}</>;
+};
 
 // Admin Imports
 import { AdminLayout } from './components/admin/AdminLayout';
@@ -52,34 +65,36 @@ export default function App() {
       <CartProvider>
         <NotificationProvider>
           <BrowserRouter>
-            <Routes>
-              {/* Admin Routes */}
-              <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
-                <Route index element={<AdminDashboardScreen />} />
-                <Route path="products" element={<AdminProductsScreen />} />
-                <Route path="orders" element={<AdminOrdersScreen />} />
-                <Route path="customers" element={<AdminCustomersScreen />} />
-              </Route>
+            <MaintenanceWrapper>
+              <Routes>
+                {/* Admin Routes */}
+                <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+                  <Route index element={<AdminDashboardScreen />} />
+                  <Route path="products" element={<AdminProductsScreen />} />
+                  <Route path="orders" element={<AdminOrdersScreen />} />
+                  <Route path="customers" element={<AdminCustomersScreen />} />
+                </Route>
 
-              {/* Public Routes - Wrapped in Layout individually for cleaner routing */}
-              <Route path="/" element={<Layout><SplashScreen /></Layout>} />
-              <Route path="/onboarding" element={<Layout><OnboardingScreen /></Layout>} />
-              <Route path="/welcome" element={<Layout><WelcomeScreen /></Layout>} />
-              <Route path="/login" element={<Layout><LoginScreen /></Layout>} />
-              <Route path="/home" element={<Layout><HomeScreen /></Layout>} />
-              <Route path="/categories" element={<Layout><CategoriesScreen /></Layout>} />
-              <Route path="/catalog" element={<Layout><CatalogScreen /></Layout>} />
-              <Route path="/product/:id" element={<Layout><ProductDetailScreen /></Layout>} />
-              <Route path="/cart" element={<Layout><CartScreen /></Layout>} />
-              <Route path="/chat" element={<Layout><ChatAssistantScreen /></Layout>} />
-              <Route path="/checkout" element={<Layout><ProtectedRoute><CheckoutScreen /></ProtectedRoute></Layout>} />
-              <Route path="/wishlist" element={<Layout><ProtectedRoute><WishlistScreen /></ProtectedRoute></Layout>} />
-              <Route path="/orders" element={<Layout><ProtectedRoute><OrdersScreen /></ProtectedRoute></Layout>} />
-              <Route path="/addresses" element={<Layout><ProtectedRoute><AddressScreen /></ProtectedRoute></Layout>} />
-              <Route path="/profile" element={<Layout><ProfileScreen /></Layout>} />
-              
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                {/* Public Routes - Wrapped in Layout individually for cleaner routing */}
+                <Route path="/" element={<Layout><SplashScreen /></Layout>} />
+                <Route path="/onboarding" element={<Layout><OnboardingScreen /></Layout>} />
+                <Route path="/welcome" element={<Layout><WelcomeScreen /></Layout>} />
+                <Route path="/login" element={<Layout><LoginScreen /></Layout>} />
+                <Route path="/home" element={<Layout><HomeScreen /></Layout>} />
+                <Route path="/categories" element={<Layout><CategoriesScreen /></Layout>} />
+                <Route path="/catalog" element={<Layout><CatalogScreen /></Layout>} />
+                <Route path="/product/:id" element={<Layout><ProductDetailScreen /></Layout>} />
+                <Route path="/cart" element={<Layout><CartScreen /></Layout>} />
+                <Route path="/chat" element={<Layout><ChatAssistantScreen /></Layout>} />
+                <Route path="/checkout" element={<Layout><ProtectedRoute><CheckoutScreen /></ProtectedRoute></Layout>} />
+                <Route path="/wishlist" element={<Layout><ProtectedRoute><WishlistScreen /></ProtectedRoute></Layout>} />
+                <Route path="/orders" element={<Layout><ProtectedRoute><OrdersScreen /></ProtectedRoute></Layout>} />
+                <Route path="/addresses" element={<Layout><ProtectedRoute><AddressScreen /></ProtectedRoute></Layout>} />
+                <Route path="/profile" element={<Layout><ProfileScreen /></Layout>} />
+                
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </MaintenanceWrapper>
           </BrowserRouter>
         </NotificationProvider>
       </CartProvider>

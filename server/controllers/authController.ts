@@ -139,3 +139,47 @@ export const verifyTokenStatus = async (req: Request, res: Response) => {
     user: (req as any).user,
   });
 };
+
+import { getDb } from '../firebase/index.js';
+
+export const deleteCustomer = async (req: Request, res: Response) => {
+  const { uid } = req.params;
+
+  if (!uid) {
+    return res.status(400).json({ message: 'User ID is required' });
+  }
+
+  try {
+    console.log(`[Admin/Delete] Début de la suppression pour l'UID: ${uid}`);
+
+    // 1. Delete user from Firebase Auth
+    let authDeleted = false;
+    try {
+      await admin.auth().deleteUser(uid);
+      console.log(`[Admin/Delete] Deleted user ${uid} from Firebase Auth`);
+      authDeleted = true;
+    } catch (authError: any) {
+      console.warn(`[Admin/Delete] Warning: User auth account not found or error: ${authError.message}`);
+    }
+
+    // 2. Delete user document from Firestore (users collection)
+    const db = getDb();
+    await db.collection('users').doc(uid).delete();
+    console.log(`[Admin/Delete] Deleted user doc ${uid} from Firestore`);
+
+    const responsePayload = {
+      success: true,
+      message: 'Utilisateur supprimé définitivement avec succès.',
+      authDeleted
+    };
+    
+    console.log(`[Admin/Delete] Réponse renvoyée au client:`, JSON.stringify(responsePayload));
+    res.json(responsePayload);
+  } catch (error: any) {
+    console.error(`[Admin/Delete] Error deleting customer ${uid}:`, error);
+    const errorPayload = { message: error.message || 'Error deleting user' };
+    console.log(`[Admin/Delete] Réponse d'erreur renvoyée au client:`, JSON.stringify(errorPayload));
+    res.status(500).json(errorPayload);
+  }
+};
+

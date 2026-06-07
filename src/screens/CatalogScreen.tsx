@@ -257,19 +257,19 @@ export const CatalogScreen: React.FC = () => {
                 <div 
                   key={prod.id} 
                   onClick={() => navigate(`/product/${prod.id}`)}
-                  className="bg-white rounded-2xl overflow-hidden border border-gray-100 hover:border-blue-200 hover:shadow-lg transition-all flex flex-col active:scale-[0.99] cursor-pointer relative shadow-sm"
+                  className="bg-white rounded-2xl overflow-hidden border border-gray-100 hover:border-blue-200 hover:shadow-lg transition-all flex flex-col active:scale-[0.99] cursor-pointer relative shadow-sm h-full"
                 >
                   {/* Image Block */}
-                  <div className="relative aspect-square bg-gray-50 overflow-hidden">
+                  <div className="relative w-full pt-[100%] bg-gray-50 overflow-hidden">
                     <img
                       src={prod.imageUrl}
                       alt={prod.name}
                       loading="lazy"
-                      className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                      onError={(e) => {
+                        e.currentTarget.src = 'https://placehold.co/400x400/e2e8f0/64748b?text=Image+Indisponible';
+                      }}
                     />
-
-
-                    {/* Star rating display removed per user request */}
                   </div>
 
                   {/* Content Block */}
@@ -279,23 +279,21 @@ export const CatalogScreen: React.FC = () => {
                       {CATEGORIES_TRANSLATION[prod.category] || prod.category}
                     </span>
 
-                    <h3 className="text-sm text-gray-800 font-bold line-clamp-2 leading-tight mb-2 min-h-[2.2rem]">
+                    <h3 className="text-sm text-gray-800 font-bold line-clamp-2 leading-tight mb-2 min-h-[2.5rem]">
                       {prod.name}
                     </h3>
 
-                    <div className="mt-auto space-y-2">
+                    <div className="mt-auto space-y-1">
                       {/* Price rendering */}
-                      <div>
-                        <div className="text-blue-600 text-sm font-black flex items-center gap-0.5">
-                          <span>{Number(prod.price || 0).toLocaleString()}</span>
-                          <span className="text-[10px] font-extrabold">FC</span>
-                        </div>
+                      <div className="text-blue-600 text-sm font-black flex items-center gap-0.5">
+                        <span>{Number(prod.price || 0).toLocaleString()}</span>
+                        <span className="text-[10px] font-extrabold">FC</span>
                       </div>
 
                       {/* Add to Cart Premium Action Button */}
                       <button
                         onClick={(e) => handleAddToCart(prod, e)}
-                        className={`w-full py-2 px-1.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 active:scale-95 shadow-md ${
+                        className={`w-full py-2 px-1.5 mt-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 active:scale-95 shadow-md ${
                           inCart 
                             ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
                             : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-100 hover:shadow-lg'

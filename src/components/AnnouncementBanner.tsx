@@ -6,22 +6,22 @@ const ANNOUNCEMENTS = [
   {
     text: "Paiement rapide et sécurisé",
     icon: ShieldCheck,
-    color: "text-orange-500"
+    color: "text-purple-500"
   },
   {
     text: "Profitez de la livraison gratuite à partir de 50000fc.",
     icon: Truck,
-    color: "text-emerald-500"
+    color: "text-blue-500"
   },
   {
     text: "Articles de bonne qualité et durables",
     icon: Award,
-    color: "text-blue-500"
+    color: "text-orange-500"
   },
   {
-    text: "Commandez et réservez vos colis rapidement",
+    text: "Commandez et recevez vos colis rapidement",
     icon: Zap,
-    color: "text-amber-500"
+    color: "text-emerald-500"
   }
 ];
 

@@ -68,6 +68,10 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({ currentImageUrl, onIma
         });
 
         if (serverRes.ok) {
+          const contentType = serverRes.headers.get("content-type");
+          if (!contentType || !contentType.includes("application/json")) {
+            throw new Error("Server returned non-JSON response");
+          }
           const data = await serverRes.json();
           downloadUrl = data.imageUrl;
           console.log("Local server upload succeeded:", downloadUrl);

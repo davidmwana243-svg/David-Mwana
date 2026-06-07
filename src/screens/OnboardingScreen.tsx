@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
@@ -9,28 +9,36 @@ const STEPS = [
     title: "Qualité Premium",
     description: "Découvrez une large gamme de produits sélectionnés avec le plus grand soin pour votre satisfaction.",
     icon: Star,
-    color: "bg-blue-600",
-    image: "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=800&auto=format&fit=crop"
+    color: "bg-orange-600",
+    image: "/images/onboarding_quality_1780680571061.png"
   },
   {
     title: "Livraison Flash",
     description: "Nous traitons vos commandes en un temps record pour une livraison rapide à votre domicile.",
     icon: Zap,
-    color: "bg-orange-600",
-    image: "https://images.unsplash.com/photo-1566576721346-d4a3b4eaad5b?q=80&w=800&auto=format&fit=crop"
+    color: "bg-green-600",
+    image: "/images/onboarding_delivery_1780680586643.png"
   },
   {
     title: "Paiement Sécurisé",
     description: "Vos transactions sont protégées par les protocoles de sécurité les plus avancés du marché.",
     icon: ShieldCheck,
-    color: "bg-green-600",
-    image: "https://images.unsplash.com/photo-1563013544-824ae1b704d3?q=80&w=800&auto=format&fit=crop"
+    color: "bg-purple-600",
+    image: "/images/onboarding_secure_new_1780681554589.png"
   }
 ];
 
 export const OnboardingScreen: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Préchargement des images
+    STEPS.forEach((step) => {
+      const img = new Image();
+      img.src = step.image;
+    });
+  }, []);
 
   const handleNext = () => {
     if (currentStep < STEPS.length - 1) {
@@ -48,11 +56,18 @@ export const OnboardingScreen: React.FC = () => {
       <div className="flex-1 flex flex-col">
           {/* Image Section */}
           <div className="h-[55%] relative overflow-hidden">
-            <img 
-              src={current.image} 
-              className="w-full h-full object-cover"
-              alt={current.title}
-            />
+            <AnimatePresence mode="wait">
+              <motion.img 
+                key={current.image}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                src={current.image} 
+                className="w-full h-full object-cover"
+                alt={current.title}
+              />
+            </AnimatePresence>
             <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/60" />
             
             <div className="absolute bottom-8 left-8 right-8 flex items-center gap-4">

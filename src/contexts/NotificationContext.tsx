@@ -37,6 +37,20 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     }, 5000);
   }, []);
 
+  React.useEffect(() => {
+    const handleFCMMessage = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        const { title, body } = customEvent.detail;
+        showNotification(title || 'DavidSTORE', body || '', 'info');
+      }
+    };
+    window.addEventListener('fcm-foreground-message', handleFCMMessage);
+    return () => {
+      window.removeEventListener('fcm-foreground-message', handleFCMMessage);
+    };
+  }, [showNotification]);
+
   const value = React.useMemo(() => ({ showNotification }), [showNotification]);
 
   return (

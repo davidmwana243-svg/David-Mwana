@@ -8,10 +8,12 @@
         "id": { "type": "string" },
         "email": { "type": "string" },
         "displayName": { "type": "string" },
+        "fullName": { "type": "string" },
         "phone": { "type": "string" },
         "firstName": { "type": "string" },
         "lastName": { "type": "string" },
         "photoUrl": { "type": "string" },
+        "profilePhoto": { "type": "string" },
         "wishlist": { "type": "array" },
         "addresses": { "type": "array" },
         "createdAt": { "type": "number" },
@@ -35,10 +37,27 @@
         "category": { "type": "string" },
         "rating": { "type": "number" },
         "reviewsCount": { "type": "number" },
+        "averageRating": { "type": "number" },
+        "totalReviews": { "type": "number" },
         "stock": { "type": "number" },
         "salesCount": { "type": "number" },
         "createdAt": { "type": "number" }
       }
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Product reviews.",
+      "type": "object",
+      "properties": {
+        "reviewId": { "type": "string" },
+        "productId": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["reviewId", "productId", "rating", "createdAt"]
     },
     "Order": {
       "title": "Order",
@@ -67,6 +86,18 @@
         "icon": { "type": "string" },
         "imageUrl": { "type": "string" }
       }
+    },
+    "FcmToken": {
+      "title": "FCM Token",
+      "description": "FCM token for push notifications.",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string" },
+        "userId": { "type": "string" },
+        "isAdmin": { "type": "boolean" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["token", "userId", "updatedAt"]
     }
   },
   "firestore": {
@@ -78,6 +109,10 @@
       "schema": "Product",
       "description": "Product catalog."
     },
+    "reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Product reviews."
+    },
     "categories/{categoryId}": {
       "schema": "Category",
       "description": "Product categories."
@@ -85,6 +120,10 @@
     "orders/{orderId}": {
       "schema": "Order",
       "description": "Customer orders."
+    },
+    "fcm_tokens/{tokenId}": {
+      "schema": "FcmToken",
+      "description": "FCM registration tokens mapping."
     }
   }
 }

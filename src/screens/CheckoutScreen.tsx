@@ -5,10 +5,23 @@ import { useAuth } from '../contexts/AuthContext';
 import { createOrder } from '../services/orderService';
 import { Button } from '../components/Button';
 import { ArrowLeft, Loader2, CheckCircle2, ShieldCheck, Smartphone, MapPin, X } from 'lucide-react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNotification } from '../contexts/NotificationContext';
+
+export const sanitizeDRCPhoneNumber = (phoneStr: string): string => {
+  let cleaned = phoneStr.replace(/\s+/g, '').replace(/[-\(\)]/g, '');
+  if (cleaned.startsWith('+243')) {
+    cleaned = cleaned.substring(4);
+  } else if (cleaned.startsWith('243')) {
+    cleaned = cleaned.substring(3);
+  }
+  if (cleaned.startsWith('0')) {
+    cleaned = cleaned.substring(1);
+  }
+  return `+243${cleaned}`;
+};
 
 export const CheckoutScreen: React.FC = () => {
   const { items, totalPrice, clearCart } = useCart();
@@ -21,11 +34,87 @@ export const CheckoutScreen: React.FC = () => {
   const [address, setAddress] = useState(defaultAddr?.addressLines || '');
   const [city, setCity] = useState(defaultAddr?.city || '');
   const [zip, setZip] = useState('');
-  const [phone, setPhone] = useState(profile?.paymentPhone || profile?.phone || '');
+  const [phone, setPhone] = useState(profile?.paymentPhone || profile?.telephone || profile?.phone || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'form' | 'waiting' | 'success' | 'error'>('form');
   const [errorMessage, setErrorMessage] = useState('');
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+
+  // States for inline editing of delivery contact details
+  const [isEditingContact, setIsEditingContact] = useState(false);
+  const [editAddressLines, setEditAddressLines] = useState(address);
+  const [editCity, setEditCity] = useState(city);
+  const [editPhone, setEditPhone] = useState(phone);
+
+  // Synchronize state when async profile or addresses are loaded or updated in Firebase
+  useEffect(() => {
+    if (defaultAddr) {
+      setAddress(defaultAddr.addressLines || '');
+      setCity(defaultAddr.city || '');
+      setEditAddressLines(defaultAddr.addressLines || '');
+      setEditCity(defaultAddr.city || '');
+    }
+  }, [defaultAddr]);
+
+  useEffect(() => {
+    if (profile) {
+      const dbPhone = profile.paymentPhone || profile.telephone || profile.phone || '';
+      setPhone(dbPhone);
+      setEditPhone(dbPhone);
+    }
+  }, [profile]);
+
+  const handleSaveContact = async () => {
+    if (!editAddressLines.trim() || !editCity.trim() || !editPhone.trim()) {
+      showNotification("Erreur", "Veuillez remplir tous les champs obligatoires.", "error");
+      return;
+    }
+    
+    // Normalize phone formatting immediately
+    const cleanPhone = sanitizeDRCPhoneNumber(editPhone);
+    setAddress(editAddressLines);
+    setCity(editCity);
+    setPhone(cleanPhone);
+    setIsEditingContact(false);
+
+    if (user && profile) {
+      try {
+        const { doc, updateDoc } = await import('firebase/firestore');
+        const userRef = doc(db, 'users', user.uid);
+
+        const currentAddresses = profile.addresses || [];
+        const updatedAddresses = [...currentAddresses];
+        const defaultIdx = updatedAddresses.findIndex(a => a.isDefault);
+
+        const newAddressObj = {
+          id: defaultIdx >= 0 ? updatedAddresses[defaultIdx].id : 'addr_default',
+          label: defaultIdx >= 0 ? updatedAddresses[defaultIdx].label : 'Adresse par défaut',
+          fullName: profile.displayName || `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || 'Client',
+          phone: cleanPhone,
+          addressLines: editAddressLines,
+          city: editCity,
+          country: 'RD Congo',
+          isDefault: true
+        };
+
+        if (defaultIdx >= 0) {
+          updatedAddresses[defaultIdx] = newAddressObj;
+        } else {
+          updatedAddresses.push(newAddressObj);
+        }
+
+        await updateDoc(userRef, {
+          paymentPhone: cleanPhone,
+          phone: cleanPhone,
+          telephone: cleanPhone,
+          addresses: updatedAddresses
+        });
+        showNotification('Profil mis à jour', 'Vos coordonnées de livraison ont été enregistrées avec succès.', 'success');
+      } catch (err: any) {
+        console.warn("Failed recording contact revisions to profile:", err?.message || err);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!currentOrderId || paymentStep !== 'waiting') return;
@@ -120,9 +209,13 @@ export const CheckoutScreen: React.FC = () => {
       const shippingFee = totalPrice < 50000 ? 3000 : 0;
       const finalTotal = totalPrice + shippingFee;
       const fullAddress = `${address}, ${city} ${zip}`;
+      
+      // Sanitize phone number before passing to service layer and payment API
+      const sanitizedPhone = sanitizeDRCPhoneNumber(phone);
+
       // 1. Create Order (status will be payment_pending)
       const customerName = profile?.displayName || profile?.firstName ? `${profile.firstName} ${profile.lastName || ''}`.trim() : (user.displayName || 'Client DavidSTORE');
-      const newOrder = await createOrder(user.uid, items, finalTotal, fullAddress, customerName, phone, defaultAddr);
+      const newOrder = await createOrder(user.uid, items, finalTotal, fullAddress, customerName, sanitizedPhone, defaultAddr);
       setCurrentOrderId(newOrder.id);
       
       // 2. Initiate Payment
@@ -135,10 +228,15 @@ export const CheckoutScreen: React.FC = () => {
         },
         body: JSON.stringify({
           amount: finalTotal,
-          clientPhoneNumber: phone.startsWith('+243') ? phone : `+243${phone}`,
+          clientPhoneNumber: sanitizedPhone,
           orderId: newOrder.id
         })
       });
+      
+      const contentType = paymentRes.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Erreur de connexion avec le serveur de paiement.");
+      }
       
       const paymentData = await paymentRes.json();
       
@@ -176,7 +274,17 @@ export const CheckoutScreen: React.FC = () => {
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+    if (currentOrderId && paymentStep !== 'success') {
+      try {
+        await updateDoc(doc(db, 'orders', currentOrderId), {
+          status: 'cancelled',
+          updatedAt: Date.now()
+        });
+      } catch (err) {
+        console.error("Error cancelling order on reset:", err);
+      }
+    }
     setPaymentStep('form');
     setIsSubmitting(false);
   };
@@ -223,34 +331,92 @@ export const CheckoutScreen: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-gray-800">Livraison & Contact</h2>
-              {!address && <span className="text-[10px] text-red-500 font-bold uppercase animate-pulse">Profil incomplet</span>}
+              <button 
+                type="button"
+                onClick={() => {
+                  setEditAddressLines(address);
+                  setEditCity(city);
+                  setEditPhone(phone);
+                  setIsEditingContact(!isEditingContact);
+                }}
+                className="text-xs font-bold text-orange-500 hover:text-orange-600 transition-colors"
+                id="edit-delivery-toggle"
+              >
+                {isEditingContact ? "Annuler" : "Modifier"}
+              </button>
             </div>
             
-            <div className="space-y-4">
-              <div className="flex items-start">
-                <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center mr-3 shrink-0">
-                  <MapPin className="w-4 h-4 text-orange-500" />
-                </div>
+            {isEditingContact ? (
+              <div className="space-y-4 border-t border-gray-100 pt-4 animate-in fade-in duration-200">
                 <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Adresse de livraison</p>
-                  <p className="text-sm font-medium text-gray-900 leading-tight">
-                    {address ? `${address}, ${city}` : "Non renseignée dans le profil"}
-                  </p>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Adresse de livraison (N°, Avenue, Quartier, Commune)</label>
+                  <input
+                    type="text"
+                    value={editAddressLines}
+                    onChange={(e) => setEditAddressLines(e.target.value)}
+                    placeholder="Ex: 14 Av. Laurent Désiré Kabila, Q/Golf, C/Lubumbashi"
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-gray-800 font-medium"
+                  />
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Ville</label>
+                    <input
+                      type="text"
+                      value={editCity}
+                      onChange={(e) => setEditCity(e.target.value)}
+                      placeholder="Ex: Lubumbashi"
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-gray-800 font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">N° de paiement (Orange, M-Pesa...)</label>
+                    <input
+                      type="tel"
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
+                      placeholder="Ex: 0821234567"
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-gray-800 font-medium"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveContact}
+                  disabled={!editAddressLines.trim() || !editCity.trim() || !editPhone.trim()}
+                  className="w-full py-3 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg active:scale-95 transition-all cursor-pointer"
+                  id="save-delivery-details"
+                >
+                  Enregistrer les coordonnées
+                </button>
               </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-start">
+                  <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center mr-3 shrink-0">
+                    <MapPin className="w-4 h-4 text-orange-500" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Adresse de livraison</p>
+                    <p className="text-sm font-medium text-gray-900 leading-tight">
+                      {address ? `${address}, ${city}` : "Non renseignée dans le profil"}
+                    </p>
+                  </div>
+                </div>
 
-              <div className="flex items-start">
-                <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center mr-3 shrink-0">
-                  <Smartphone className="w-4 h-4 text-blue-500" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Numéro de paiement</p>
-                  <p className="text-sm font-medium text-gray-900">
-                    {phone ? (phone.startsWith('+243') ? phone : `+243 ${phone}`) : "Non renseigné"}
-                  </p>
+                <div className="flex items-start">
+                  <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center mr-3 shrink-0">
+                    <Smartphone className="w-4 h-4 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Numéro de paiement</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {phone ? (phone.startsWith('+243') ? phone : `+243 ${phone}`) : "Non renseigné"}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           <form onSubmit={handleSubmit}>

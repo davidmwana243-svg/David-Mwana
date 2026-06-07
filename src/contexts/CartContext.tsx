@@ -4,9 +4,9 @@ import { useAuth } from './AuthContext';
 
 interface CartContextType {
   items: CartItem[];
-  addToCart: (product: Product, quantity?: number) => void;
-  removeFromCart: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
+  addToCart: (product: Product, quantity?: number, selectedSize?: string) => void;
+  removeFromCart: (productId: string, selectedSize?: string) => void;
+  updateQuantity: (productId: string, quantity: number, selectedSize?: string) => void;
   clearCart: () => void;
   totalItems: number;
   totalPrice: number;
@@ -45,32 +45,32 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(cartKey, JSON.stringify(items));
   }, [items, user, isInitialized]);
 
-  const addToCart = React.useCallback((product: Product, quantity = 1) => {
+  const addToCart = React.useCallback((product: Product, quantity = 1, selectedSize?: string) => {
     setItems(current => {
-      const existing = current.find(item => item.product.id === product.id);
+      const existing = current.find(item => item.product.id === product.id && item.selectedSize === selectedSize);
       if (existing) {
         return current.map(item =>
-          item.product.id === product.id
+          item.product.id === product.id && item.selectedSize === selectedSize
             ? { ...item, quantity: item.quantity + quantity }
             : item
         );
       }
-      return [...current, { product, quantity }];
+      return [...current, { product, quantity, selectedSize }];
     });
   }, []);
 
-  const removeFromCart = React.useCallback((productId: string) => {
-    setItems(current => current.filter(item => item.product.id !== productId));
+  const removeFromCart = React.useCallback((productId: string, selectedSize?: string) => {
+    setItems(current => current.filter(item => !(item.product.id === productId && item.selectedSize === selectedSize)));
   }, []);
 
-  const updateQuantity = React.useCallback((productId: string, quantity: number) => {
+  const updateQuantity = React.useCallback((productId: string, quantity: number, selectedSize?: string) => {
     if (quantity <= 0) {
-      removeFromCart(productId);
+      removeFromCart(productId, selectedSize);
       return;
     }
     setItems(current =>
       current.map(item =>
-        item.product.id === productId ? { ...item, quantity } : item
+        item.product.id === productId && item.selectedSize === selectedSize ? { ...item, quantity } : item
       )
     );
   }, [removeFromCart]);

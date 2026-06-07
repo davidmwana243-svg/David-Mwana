@@ -9,8 +9,21 @@ export interface Product {
   category: string;
   rating: number;
   reviewsCount: number;
+  averageRating?: number;
+  totalReviews?: number;
   stock: number;
   salesCount: number;
+  createdAt: number;
+  sizes?: string[];
+}
+
+export interface Review {
+  reviewId: string;
+  productId: string;
+  customerId: string;
+  customerName: string;
+  rating: number;
+  comment: string;
   createdAt: number;
 }
 
@@ -24,6 +37,7 @@ export interface Category {
 export interface CartItem {
   product: Product;
   quantity: number;
+  selectedSize?: string;
 }
 
 export interface UserAddress {
@@ -47,9 +61,15 @@ export interface UserAddress {
 export interface UserProfile {
   id: string;
   email: string;
+  nom?: string;       // French name mapping
   displayName?: string;
+  fullName?: string;  // Direct requested naming
   photoUrl?: string;
+  photoURL?: string; // requested format mapping
+  profilePhoto?: string; // Schema requested mapping
   phone?: string;
+  telephone?: string; // French phone mapping
+  phoneNumber?: string; // fallback mapping
   firstName?: string;
   lastName?: string;
   wishlist: string[]; // Product IDs
@@ -57,6 +77,8 @@ export interface UserProfile {
   preferredPaymentMethod?: string;
   paymentPhone?: string;
   createdAt: number;
+  dateCreation?: number; // French date mapping
+  pendingEmail?: string;
 }
 
 export interface Order {

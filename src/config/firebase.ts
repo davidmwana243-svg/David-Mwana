@@ -12,7 +12,8 @@ export const auth = getAuth(app);
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({
     tabManager: persistentMultipleTabManager()
-  })
+  }),
+  ignoreUndefinedProperties: true
 }, firebaseConfig.firestoreDatabaseId);
 
 export const storage = getStorage(app);

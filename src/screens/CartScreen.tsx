@@ -50,25 +50,32 @@ export const CartScreen: React.FC = () => {
 
       <div className="flex-1 p-4 space-y-4 overflow-y-auto">
         {items.map((item) => (
-          <div key={item.product.id} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex space-x-3">
+          <div key={item.product.id + (item.selectedSize || '')} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex space-x-3">
             <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-              <img src={item.product.imageUrl} alt={item.product.name} className="w-full h-full object-cover" />
+               <img src={item.product.imageUrl} alt={item.product.name} className="w-full h-full object-cover" />
             </div>
             <div className="flex-1 flex flex-col justify-between">
               <div>
                 <h3 className="text-sm font-medium text-gray-900 line-clamp-2 leading-tight">
                   {item.product.name}
                 </h3>
-                <p className="text-xs text-gray-500 mt-1">{item.product.category}</p>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <span className="text-[11px] text-gray-400 capitalize">{item.product.category.replace('_', ' ')}</span>
+                  {item.selectedSize && (
+                    <span className="text-[10px] bg-orange-100 text-orange-600 font-extrabold px-1.5 py-0.5 rounded">
+                      Taille: {item.selectedSize}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center justify-between mt-2">
                 <span className="text-orange-500 font-bold">{Number(item.product.price || 0).toLocaleString()} FC</span>
                 <div className="flex items-center bg-gray-100 rounded-lg">
-                  <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)} className="p-1.5 text-gray-600">
+                  <button onClick={() => updateQuantity(item.product.id, item.quantity - 1, item.selectedSize)} className="p-1.5 text-gray-600">
                     {item.quantity === 1 ? <Trash2 className="w-4 h-4 text-red-500" /> : <Minus className="w-4 h-4" />}
                   </button>
                   <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
-                  <button onClick={() => updateQuantity(item.product.id, item.quantity + 1)} className="p-1.5 text-gray-600">
+                  <button onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.selectedSize)} className="p-1.5 text-gray-600">
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>

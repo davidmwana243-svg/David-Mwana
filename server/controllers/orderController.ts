@@ -152,7 +152,7 @@ export const cancelOrder = async (req: Request, res: Response) => {
       return res.status(403).json({ message: 'Unauthorized to cancel this order' });
     }
 
-    if (order.status !== 'processing') {
+    if (order.status === 'shipped' || order.status === 'delivered' || order.status === 'cancelled') {
       return res.status(400).json({ message: 'Order cannot be cancelled in its current status' });
     }
 

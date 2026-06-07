@@ -24,6 +24,7 @@ export const AdminProductsScreen: React.FC = () => {
   const [stock, setStock] = useState('0');
   const [category, setCategory] = useState('c1');
   const [imageUrl, setImageUrl] = useState('');
+  const [sizesInput, setSizesInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -60,6 +61,7 @@ export const AdminProductsScreen: React.FC = () => {
     setStock('0');
     setCategory(categories[0]?.id || 'mode');
     setImageUrl('');
+    setSizesInput('');
     setSuccessMsg('');
     setErrorMsg('');
     setIsModalOpen(true);
@@ -73,6 +75,7 @@ export const AdminProductsScreen: React.FC = () => {
     setStock(product.stock.toString());
     setCategory(product.category);
     setImageUrl(product.imageUrl);
+    setSizesInput(product.sizes ? product.sizes.join(', ') : '');
     setSuccessMsg('');
     setErrorMsg('');
     setIsModalOpen(true);
@@ -83,10 +86,13 @@ export const AdminProductsScreen: React.FC = () => {
     setIsSaving(true);
     setErrorMsg('');
     setSuccessMsg('');
-    console.log("handleSave started", { name, price, stock, category, imageUrl });
+    console.log("handleSave started", { name, price, stock, category, imageUrl, sizesInput });
     try {
       const parsedPrice = parseFloat(price) || 0;
       const parsedStock = parseInt(stock) || 0;
+      const parsedSizes = sizesInput.split(',')
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
       
       if (editingProduct) {
         console.log("Updating existing product:", editingProduct.id);
@@ -95,7 +101,8 @@ export const AdminProductsScreen: React.FC = () => {
           price: parsedPrice, 
           stock: parsedStock, 
           category,
-          imageUrl
+          imageUrl,
+          sizes: parsedSizes
         });
         setSuccessMsg('Produit mis à jour avec succès');
       } else {
@@ -122,7 +129,8 @@ export const AdminProductsScreen: React.FC = () => {
           images: [finalImageUrl], 
           rating: 0, 
           reviewsCount: 0, 
-          salesCount: 0
+          salesCount: 0,
+          sizes: parsedSizes
         };
         await addProduct(productData);
         setSuccessMsg('Produit ajouté avec succès');
@@ -290,6 +298,17 @@ export const AdminProductsScreen: React.FC = () => {
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tailles Personnalisées (séparées par une virgule)</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: S, M, L, XL ou 38, 39, 40 (facultatif)" 
+                  value={sizesInput} 
+                  onChange={e=>setSizesInput(e.target.value)} 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" 
+                />
+                <p className="text-[10px] text-gray-400 mt-1 font-medium">Laissez vide pour utiliser les plages automatiques selon la catégorie.</p>
               </div>
               <div>
                 <ImageUpload 

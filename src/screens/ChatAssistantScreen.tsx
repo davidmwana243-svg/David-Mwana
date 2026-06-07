@@ -93,6 +93,11 @@ export const ChatAssistantScreen: React.FC = () => {
         })
       });
 
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("L'assistant est temporairement indisponible.");
+      }
+
       const data = await response.json();
 
       if (data.error) throw new Error(data.error);
@@ -104,7 +109,10 @@ export const ChatAssistantScreen: React.FC = () => {
       const responseText = data.text || "";
 
       while ((match = recommendRegex.exec(responseText)) !== null) {
-        foundIds.push(match[1]);
+        const idVal = match[1];
+        if (!foundIds.includes(idVal)) {
+          foundIds.push(idVal);
+        }
       }
 
       // Strip recomendation tag markup to keep bubble clean
@@ -204,13 +212,13 @@ export const ChatAssistantScreen: React.FC = () => {
                     <span>Articles mentionnés ci-dessus :</span>
                   </div>
                   <div className="flex gap-3 overflow-x-auto py-1 scrollbar-none snap-x">
-                    {msg.recommendedProductIds.map(prodId => {
+                    {msg.recommendedProductIds.map((prodId, idx) => {
                       const prod = catalogProducts.find(p => p.id === prodId);
                       if (!prod) return null;
 
                       return (
                         <div
-                          key={prod.id}
+                          key={`${prod.id}-${idx}`}
                           className="flex-shrink-0 w-44 bg-white border border-gray-150 rounded-2xl p-2.5 shadow-sm flex flex-col justify-between snap-start"
                         >
                           <div>

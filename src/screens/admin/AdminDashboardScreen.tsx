@@ -9,8 +9,13 @@ import {
   User as UserIcon,
   RotateCcw,
   Clock,
-  Bell
+  Bell,
+  Wrench,
+  Plus,
+  Trash2,
+  ShieldAlert
 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   AreaChart, 
   Area, 
@@ -36,6 +41,42 @@ export const AdminDashboardScreen: React.FC = () => {
   const [resetting, setResetting] = useState(false);
   const [origin, setOrigin] = useState<string>('');
   const { showNotification } = useNotification();
+
+  const { maintenanceMode, maintenanceMessage, maintenanceChangelog, setMaintenance } = useAuth();
+  const [mMode, setMMode] = useState(maintenanceMode);
+  const [mMessage, setMMessage] = useState(maintenanceMessage);
+  const [newChangeItem, setNewChangeItem] = useState('');
+  const [mChangelog, setMChangelog] = useState<string[]>(maintenanceChangelog);
+  const [savingMaintenance, setSavingMaintenance] = useState(false);
+
+  useEffect(() => {
+    setMMode(maintenanceMode);
+    setMMessage(maintenanceMessage);
+    setMChangelog(maintenanceChangelog);
+  }, [maintenanceMode, maintenanceMessage, maintenanceChangelog]);
+
+  const handleAddChangelogItem = () => {
+    if (!newChangeItem.trim()) return;
+    setMChangelog(prev => [...prev, newChangeItem.trim()]);
+    setNewChangeItem('');
+  };
+
+  const handleRemoveChangelogItem = (index: number) => {
+    setMChangelog(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleSaveMaintenance = async () => {
+    setSavingMaintenance(true);
+    try {
+      await setMaintenance(mMode, mMessage, mChangelog);
+      showNotification("Mise à jour", "Configuration de la mise à jour enregistrée avec succès !", "success");
+    } catch (err) {
+      console.error("Error updating maintenance settings:", err);
+      showNotification("Erreur", "Impossible d'enregistrer la configuration.", "error");
+    } finally {
+      setSavingMaintenance(false);
+    }
+  };
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -93,7 +134,16 @@ export const AdminDashboardScreen: React.FC = () => {
     const customersQuery = query(collection(db, 'users'));
     const unsubCustomers = onSnapshot(customersQuery, (snapshot) => {
       const fetched: UserProfile[] = [];
-      snapshot.forEach(docSnap => fetched.push(docSnap.data() as UserProfile));
+      snapshot.forEach(docSnap => {
+        const user = docSnap.data() as UserProfile;
+        const email = user.email || '';
+        const photo = user.photoURL || user.photoUrl || '';
+        const condition1 = email === '0995289355@davidstore.com' || email === 'davidmwana243@gmail.com';
+        const condition2 = email === 'davstore4@gmail.com' && photo.trim() === '';
+        if (!(condition1 || condition2)) {
+          fetched.push(user);
+        }
+      });
       setCustomers(fetched);
     });
 
@@ -133,7 +183,9 @@ export const AdminDashboardScreen: React.FC = () => {
                              data.email === 'davidmwana243@gmail.com' || 
                              data.email === 'davstore4@gmail.com' ||
                              data.phone === '0995289355' ||
-                             data.phone === '+243995289355';
+                             data.phone === '+243995289355' ||
+                             data.telephone === '0995289355' ||
+                             data.telephone === '+243995289355';
         if (!isCurrentAdmin) {
           batchDocs.delete(docSnap.ref);
         }
@@ -352,6 +404,112 @@ export const AdminDashboardScreen: React.FC = () => {
             </div>
             <p className="text-[10px] text-gray-400 mt-2 italic">* Lien interne pour les modifications techniques.</p>
           </div>
+        </div>
+      </div>
+
+      {/* ⚙️ App Status & Maintenance Controls */}
+      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 space-y-5">
+        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-2">
+            <Wrench className="w-5 h-5 text-orange-500" />
+            <h3 className="text-lg font-bold text-gray-900">Mise à jour & Maintenance</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] uppercase font-black px-2.5 py-1 rounded-full ${mMode ? "bg-orange-100 text-orange-600 animate-pulse border border-orange-200" : "bg-gray-100 text-gray-500 border border-gray-200"}`}>
+              {mMode ? "Drapeau d'update actif" : "Mode client normal"}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Toggles and Messages */}
+          <div className="space-y-4">
+            <div>
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input 
+                  type="checkbox" 
+                  checked={mMode}
+                  onChange={(e) => setMMode(e.target.checked)}
+                  className="w-5 h-5 rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer accent-orange-500 font-bold"
+                />
+                <div>
+                  <span className="text-sm font-bold text-gray-950">Activer l'écran de mise à jour</span>
+                  <p className="text-xs text-gray-500 leading-relaxed max-w-sm mt-0.5 font-normal">
+                    Si coché, tous vos clients d'achat seront redirigés vers l'écran de mise à jour en temps réel. Seul votre compte administrateur aura accès complet à la boutique pour tester vos modifications.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            <div className="space-y-1.5 flex flex-col">
+              <label className="text-xs font-bold text-gray-600 uppercase tracking-wider">Texte de l'Annonce</label>
+              <textarea
+                value={mMessage}
+                onChange={(e) => setMMessage(e.target.value)}
+                placeholder="Ex. Nous apportons de nouvelles améliorations sensationnelles..."
+                rows={3}
+                className="w-full text-sm border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900"
+              />
+            </div>
+          </div>
+
+          {/* Changelog Items Editor */}
+          <div className="space-y-3">
+            <label className="text-xs font-bold text-gray-600 uppercase tracking-wider block">Journal de modification (Ce qui a changé)</label>
+            
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newChangeItem}
+                onChange={(e) => setNewChangeItem(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddChangelogItem();
+                  }
+                }}
+                placeholder="Ex. Ajout de la notification de paiement"
+                className="flex-1 text-xs border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-900 font-medium"
+              />
+              <button
+                type="button"
+                onClick={handleAddChangelogItem}
+                className="bg-orange-500 hover:bg-orange-600 text-white px-4 rounded-xl flex items-center justify-center transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* List */}
+            <div className="border border-gray-100 rounded-xl p-3 max-h-[140px] overflow-y-auto bg-gray-50/50 space-y-2">
+              {mChangelog.map((item, idx) => (
+                <div key={idx} className="flex justify-between items-start gap-2 text-xs bg-white p-2.5 rounded-lg border border-gray-100 shadow-sm">
+                  <span className="text-gray-700 font-medium leading-relaxed">{item}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveChangelogItem(idx)}
+                    className="text-red-500 hover:text-red-700 p-1 rounded-md transition-colors hover:bg-red-50 cursor-pointer shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+              {mChangelog.length === 0 && (
+                <p className="text-center text-gray-400 font-medium py-3 text-xs italic">Aucun élément dans la liste.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-100 pt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={handleSaveMaintenance}
+            disabled={savingMaintenance}
+            className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-sm shadow-md shadow-orange-500/15 hover:shadow-orange-500/20 active:scale-95 transition-all text-center flex items-center justify-center gap-2 cursor-pointer"
+          >
+            {savingMaintenance ? "Enregistrement..." : "Enregistrer la Configuration"}
+          </button>
         </div>
       </div>
 

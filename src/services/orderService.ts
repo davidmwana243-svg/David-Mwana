@@ -134,6 +134,19 @@ export const parseDRCOnlineAddress = (address: string): DRCAddressDetails => {
   };
 };
 
+const cleanUndefined = (obj: any): any => {
+  if (Array.isArray(obj)) {
+    return obj.map(v => cleanUndefined(v));
+  } else if (obj !== null && typeof obj === 'object') {
+    return Object.fromEntries(
+      Object.entries(obj)
+        .filter(([_, v]) => v !== undefined)
+        .map(([k, v]) => [k, cleanUndefined(v)])
+    );
+  }
+  return obj;
+};
+
 export const createOrder = async (userId: string, items: CartItem[], total: number, shippingAddress: string, userName?: string, userPhone?: string, addressObj?: UserAddress): Promise<Order> => {
   const newOrderRef = doc(collection(db, 'orders'));
   const parsedAddr = parseDRCOnlineAddress(shippingAddress);
@@ -171,7 +184,8 @@ export const createOrder = async (userId: string, items: CartItem[], total: numb
     userPhone: finalPhone
   };
   
-  await setDoc(newOrderRef, order);
+  const cleanedOrder = cleanUndefined(order);
+  await setDoc(newOrderRef, cleanedOrder);
   return order;
 };
 
@@ -199,6 +213,22 @@ export const getUserOrders = async (userId: string): Promise<Order[]> => {
 export const updateOrderStatus = async (orderId: string, status: Order['status']): Promise<void> => {
   const orderRef = doc(db, 'orders', orderId);
   await updateDoc(orderRef, { status });
+};
+
+export const updateOrderItemSize = async (orderId: string, itemIdx: number, newSize: string): Promise<void> => {
+  const orderRef = doc(db, 'orders', orderId);
+  const snap = await getDoc(orderRef);
+  if (snap.exists()) {
+    const orderData = snap.data() as Order;
+    if (orderData.items && orderData.items[itemIdx]) {
+      const updatedItems = [...orderData.items];
+      updatedItems[itemIdx] = {
+        ...updatedItems[itemIdx],
+        selectedSize: newSize || undefined
+      };
+      await updateDoc(orderRef, { items: updatedItems });
+    }
+  }
 };
 
 export const confirmQRReceived = async (orderId: string, token: string): Promise<boolean> => {

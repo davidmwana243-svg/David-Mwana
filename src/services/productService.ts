@@ -16,7 +16,15 @@ export const getProducts = async (): Promise<Product[]> => {
     // Since there are items in Firestore, the database is active and seeded
     localStorage.setItem('database_seeded', 'true');
     const prods = snapshot.docs.map(doc => doc.data() as Product);
-    return prods.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const seen = new Set<string>();
+    const uniqueProds: Product[] = [];
+    prods.forEach(p => {
+      if (p && p.id && !seen.has(p.id)) {
+        seen.add(p.id);
+        uniqueProds.push(p);
+      }
+    });
+    return uniqueProds.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   } catch (error) {
     console.warn('Falling back to mock products due to error: ', error);
     return EX_PRODUCTS;
@@ -138,11 +146,14 @@ export const addProductReview = async (productId: string, userId: string, userNa
   const reviewsCol = collection(db, 'reviews');
   const newReviewRef = doc(reviewsCol);
   
-  const review: ProductReview = {
+  const review: any = {
     id: newReviewRef.id,
+    reviewId: newReviewRef.id,
     productId,
     userId,
+    customerId: userId,
     userName,
+    customerName: userName,
     rating,
     comment,
     createdAt: Date.now()
@@ -156,22 +167,28 @@ export const addProductReview = async (productId: string, userId: string, userNa
     const pSnap = await getDoc(productRef);
     if (pSnap.exists()) {
       const pData = pSnap.data() as Product;
-      const currentRatingCount = pData.reviewsCount || 0;
-      const oldRating = pData.rating || 0;
+      console.log("Updating product rating, product data:", pData);
+      const currentRatingCount = (pData.totalReviews ?? pData.reviewsCount ?? 0);
+      const oldRating = (pData.averageRating ?? pData.rating ?? 0);
       
       let newAverage = rating;
       if (currentRatingCount > 0) {
         newAverage = parseFloat(((oldRating * currentRatingCount + rating) / (currentRatingCount + 1)).toFixed(1));
       }
       
+      console.log("New average rating calculation:", newAverage, currentRatingCount + 1);
+      
       await updateDoc(productRef, {
         rating: newAverage,
-        reviewsCount: currentRatingCount + 1
+        reviewsCount: currentRatingCount + 1,
+        averageRating: newAverage,
+        totalReviews: currentRatingCount + 1
       });
+      console.log("Product updated successfully in Firestore.");
     }
   } catch (err) {
     console.warn("Could not calculate and update average rating in DB, ignoring", err);
   }
   
-  return review;
+  return review as ProductReview;
 };

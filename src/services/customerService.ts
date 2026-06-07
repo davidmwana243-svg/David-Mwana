@@ -1,20 +1,89 @@
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, writeBatch } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { UserProfile } from '../models/types';
 
 export const getCustomers = async (): Promise<UserProfile[]> => {
   try {
-    const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
+    // To ensure NO users are omitted (since Firestore queries with orderBy omit documents missing the order key),
+    // we query all documents and sort them in-memory by whichever timestamp they have.
+    const q = collection(db, 'users');
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => {
-      const data = doc.data() as UserProfile;
+    
+    const batch = writeBatch(db);
+    let needsBatchUpdate = false;
+
+    const users = snapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      let updatedDataForUser: any = {};
+      let needsIndividualUpdate = false;
+
+      // Extract raw values
+      const realPhone = data.telephone || data.phone || data.phoneNumber || '';
+      const realName = data.nom || data.displayName || (data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : '');
+      const defaultName = data.email ? `Client ${data.email.split('@')[0]}` : 'Utilisateur';
+      const actualName = realName || defaultName;
+      const creationDate = data.dateCreation || data.createdAt || Date.now();
+      const actualPhoto = data.photoURL || data.photoUrl || '';
+
+      // Check if mandatory fields are missing/incorrect in Firestore to self-heal old accounts
+      if (!data.nom && actualName) {
+        updatedDataForUser.nom = actualName;
+        needsIndividualUpdate = true;
+      }
+      if (!data.telephone && realPhone) {
+        updatedDataForUser.telephone = realPhone;
+        needsIndividualUpdate = true;
+      }
+      if (!data.photoURL && actualPhoto) {
+        updatedDataForUser.photoURL = actualPhoto;
+        needsIndividualUpdate = true;
+      }
+      if (!data.dateCreation && creationDate) {
+        updatedDataForUser.dateCreation = creationDate;
+        needsIndividualUpdate = true;
+      }
+
+      if (needsIndividualUpdate) {
+        const userDocRef = doc(db, 'users', docSnap.id);
+        batch.update(userDocRef, updatedDataForUser);
+        needsBatchUpdate = true;
+      }
+
       return {
+        id: docSnap.id,
         ...data,
-        displayName: data.displayName && data.displayName !== 'Utilisateur'
-          ? data.displayName
-          : (data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : 'Utilisateur')
-      };
+        ...updatedDataForUser, // merge newly corrected fields
+        nom: actualName,
+        displayName: actualName,
+        phone: realPhone,
+        telephone: realPhone,
+        phoneNumber: realPhone,
+        photoURL: actualPhoto,
+        photoUrl: actualPhoto,
+        createdAt: typeof creationDate === 'number' ? creationDate : Date.parse(creationDate) || Date.now(),
+        dateCreation: typeof creationDate === 'number' ? creationDate : Date.parse(creationDate) || Date.now(),
+      } as UserProfile;
     });
+
+    const filteredUsers = users.filter((user) => {
+      const email = user.email || '';
+      const photo = user.photoURL || user.photoUrl || '';
+      const condition1 = email === '0995289355@davidstore.com' || email === 'davidmwana243@gmail.com';
+      const condition2 = email === 'davstore4@gmail.com' && photo.trim() === '';
+      return !(condition1 || condition2);
+    });
+
+    if (needsBatchUpdate) {
+      batch.commit().then(() => {
+        console.log("Successfully auto-corrected obsolete client profiles in Firestore.");
+      }).catch(err => {
+        console.error("Error auto-correcting profiles in background:", err);
+      });
+    }
+
+    // Sort in-memory by creation date descending
+    filteredUsers.sort((a, b) => b.createdAt - a.createdAt);
+    return filteredUsers;
   } catch (error) {
     console.error("Error fetching customers", error);
     return [];

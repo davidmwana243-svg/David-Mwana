@@ -3,7 +3,7 @@ import jsQR from 'jsqr';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { Order } from '../models/types';
-import { getUserOrders, confirmQRReceived } from '../services/orderService';
+import { getUserOrders, confirmQRReceived, updateOrderStatus } from '../services/orderService';
 import { 
   ArrowLeft, 
   Package, 
@@ -89,6 +89,7 @@ export const OrdersScreen: React.FC = () => {
       setIsSubmittingReviews(prev => ({ ...prev, [productId]: false }));
     }
   };
+
 
   // Real QR Camera scan refs & states
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -444,6 +445,8 @@ export const OrdersScreen: React.FC = () => {
                     </div>
                   )}
 
+
+
                   {order.status !== 'payment_pending' && order.status !== 'cancelled' && (
                     <button
                       onClick={() => handleOpenReviewModal(order)}
@@ -749,7 +752,14 @@ export const OrdersScreen: React.FC = () => {
                         />
                         <div className="flex-1 min-w-0">
                           <h4 className="font-bold text-xs text-gray-800 truncate">{prod.name}</h4>
-                          <p className="text-[9px] text-gray-400 font-bold uppercase">{prod.category}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            <span className="text-[9px] text-gray-400 font-bold uppercase">{prod.category.replace('_', ' ')}</span>
+                            {item.selectedSize && (
+                              <span className="text-[9px] bg-orange-100 text-orange-600 font-extrabold px-1 rounded">
+                                T: {item.selectedSize}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
