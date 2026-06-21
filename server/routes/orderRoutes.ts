@@ -6,8 +6,8 @@ import {
   getAllOrders, 
   updateOrderStatus, 
   cancelOrder 
-} from '../controllers/orderController.js';
-import { verifyToken, isAdmin } from '../middleware/authMiddleware.js';
+} from '../controllers/orderController';
+import { verifyToken, isAdmin } from '../middleware/authMiddleware';
 
 const router = Router();
 

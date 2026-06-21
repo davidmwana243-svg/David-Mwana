@@ -27,11 +27,8 @@ export const initiatePayment = async (req: Request, res: Response) => {
 
   const formattedPhone = sanitizeDRCPhone(clientPhoneNumber);
 
-  // Use defined APP_URL, BASE_URL or API_URL as fallback/override for the host/protocol in production
-  const baseDomain = process.env.APP_URL || process.env.BASE_URL || process.env.API_URL;
-  const callbackUrl = baseDomain 
-    ? `${baseDomain.replace(/\/$/, '')}/api/payment/callback`
-    : `${req.protocol}://${req.get('host')}/api/payment/callback`;
+  // Generate the callback URL dynamically based on incoming request request hosts (Cloud Run public endpoints)
+  const callbackUrl = `${req.protocol}://${req.get('host')}/api/payment/callback`;
 
   console.log('================================================================');
   console.log('[SHWARY API] INITIATING TRANSACTION SESSION');
@@ -93,6 +90,69 @@ export const initiatePayment = async (req: Request, res: Response) => {
 
     if (!response.ok) {
       console.warn(`[SHWARY API] Gateway error status from Shwary: ${response.status}`);
+      
+      // Parse response to find if a suggested/retriable alternative transaction amount was sent
+      if (response.status === 422) {
+        try {
+          const errObj = JSON.parse(text);
+          const errMsg = errObj.message || '';
+          
+          // Regex matching: "we can instead process \s*([0-9.]+)"
+          const match = errMsg.match(/we can instead process\s+([0-9.]+)/i);
+          if (match && match[1]) {
+            let recommendedAmount = parseFloat(match[1]);
+            if (!isNaN(recommendedAmount) && recommendedAmount > 0) {
+              if (recommendedAmount < 100) {
+                console.log(`[SHWARY API] Small recommended amount (${recommendedAmount}) detected. Converting from USD to CDF using exchange rate of 2800...`);
+                recommendedAmount = Math.ceil(recommendedAmount * 2800);
+              }
+              console.log(`[SHWARY API] Corrective Trigger: Shwary suggested a different amount. Retrying with adjusted amount: ${recommendedAmount} CDF...`);
+              
+              const retryPayload = {
+                amount: recommendedAmount,
+                clientPhoneNumber: formattedPhone,
+                callbackUrl,
+                orderId
+              };
+              
+              // New short-circuit abort signal
+              const retryController = new AbortController();
+              const retryTimeoutId = setTimeout(() => retryController.abort(), 8000);
+              
+              const retryResponse = await fetch(gatewayUrl, {
+                method: 'POST',
+                headers: {
+                  'x-merchant-key': merchantKey!,
+                  'x-merchant-id': merchantId!,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(retryPayload),
+                signal: retryController.signal
+              });
+              
+              clearTimeout(retryTimeoutId);
+              
+              const retryText = await retryResponse.text();
+              console.log(`[SHWARY API] Retried Request Status: ${retryResponse.status}`);
+              console.log(`[SHWARY API] Retried Request Response: ${retryText}`);
+              
+              if (retryResponse.ok) {
+                const retryData = JSON.parse(retryText);
+                console.log('[SHWARY API] Alternate transaction completed successfully via auto-retry.', retryData);
+                return res.json(retryData);
+              } else {
+                console.warn(`[SHWARY API] Retry also failed with status: ${retryResponse.status}`);
+                return res.status(retryResponse.status).json({
+                  error: `La passerelle de paiement Shwary a retourné une erreur (Statut ${retryResponse.status}) lors de l'initiation de rattrapage: ${retryText}`
+                });
+              }
+            }
+          }
+        } catch (parseErr) {
+          console.error('[SHWARY API] Could not extract recommended retry options from 422 error details:', parseErr);
+        }
+      }
+      
       return res.status(response.status).json({
         error: `La passerelle de paiement Shwary a retourné une erreur (Statut ${response.status}): ${text}`
       });

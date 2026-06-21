@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -23,12 +23,27 @@ import { CatalogScreen } from './screens/CatalogScreen';
 import { MaintenanceScreen } from './screens/MaintenanceScreen';
 
 const MaintenanceWrapper = ({ children }: { children: React.ReactNode }) => {
-  const { maintenanceMode, isAdmin, loading } = useAuth();
+  const { maintenanceMode, isAdmin, loading, maintenanceLoaded } = useAuth();
+  const location = useLocation();
   
-  if (loading) return null;
+  if (loading || !maintenanceLoaded) {
+    return (
+      <div className="fixed inset-0 bg-white flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
   
+  // If maintenance mode is active, allow admins and login page
   if (maintenanceMode && !isAdmin) {
-    return <MaintenanceScreen />;
+    // Exclude login and admin paths from maintenance screen
+    const isPublicMaintenanceBypass = 
+      location.pathname === '/login' || 
+      location.pathname.startsWith('/admin');
+      
+    if (!isPublicMaintenanceBypass) {
+      return <MaintenanceScreen />;
+    }
   }
   
   return <>{children}</>;
@@ -81,8 +96,9 @@ export default function App() {
                 <Route path="/welcome" element={<Layout><WelcomeScreen /></Layout>} />
                 <Route path="/login" element={<Layout><LoginScreen /></Layout>} />
                 <Route path="/home" element={<Layout><HomeScreen /></Layout>} />
-                <Route path="/categories" element={<Layout><CategoriesScreen /></Layout>} />
+                <Route path="/categories" element={<Layout><CatalogScreen /></Layout>} />
                 <Route path="/catalog" element={<Layout><CatalogScreen /></Layout>} />
+                <Route path="/support" element={<Layout><CategoriesScreen /></Layout>} />
                 <Route path="/product/:id" element={<Layout><ProductDetailScreen /></Layout>} />
                 <Route path="/cart" element={<Layout><CartScreen /></Layout>} />
                 <Route path="/chat" element={<Layout><ChatAssistantScreen /></Layout>} />

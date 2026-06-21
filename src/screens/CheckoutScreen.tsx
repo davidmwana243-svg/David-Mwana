@@ -45,6 +45,7 @@ export const CheckoutScreen: React.FC = () => {
   const [editAddressLines, setEditAddressLines] = useState(address);
   const [editCity, setEditCity] = useState(city);
   const [editPhone, setEditPhone] = useState(phone);
+  const [selectedProvider, setSelectedProvider] = useState<'mpesa' | 'airtel' | 'orange'>('mpesa');
 
   // Synchronize state when async profile or addresses are loaded or updated in Firebase
   useEffect(() => {
@@ -327,6 +328,85 @@ export const CheckoutScreen: React.FC = () => {
           </div>
         </div>
 
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 mb-4">
+          <h2 className="font-bold text-gray-800 mb-4 text-sm flex items-center justify-between">
+            <span>Moyen de paiement</span>
+            <ShieldCheck className="w-4 h-4 text-blue-500" />
+          </h2>
+          
+          <div className="mb-2">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Mobile Money</p>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { 
+                  id: 'orange', 
+                  name: 'Orange Money', 
+                  icon: (
+                    <div className="bg-black relative rounded-xl w-full h-full flex flex-col items-center justify-center p-2 shadow-md hover:shadow-lg transition-all border border-gray-800">
+                      <div className="w-8 h-8 flex items-center justify-center mb-1">
+                        <svg viewBox="0 0 24 24" className="w-7 h-7">
+                           <path d="M6,16 L6,6 L16,6 L16,10 L10,10 L10,16 Z" fill="white" />
+                           <path d="M18,8 L18,18 L8,18 L8,14 L14,14 L14,8 Z" fill="#FF7900" />
+                        </svg>
+                      </div>
+                      <div className="text-white text-[9px] font-sans font-bold leading-tight tracking-tight text-center">
+                        Orange<br/><span className="text-gray-300 font-medium">Money</span>
+                      </div>
+                    </div>
+                  )
+                },
+                { 
+                  id: 'airtel', 
+                  name: 'Airtel Money', 
+                  icon: (
+                    <div className="bg-[#E40000] relative rounded-xl w-full h-full flex flex-col items-center justify-center p-2 shadow-md hover:shadow-lg transition-all border border-red-500">
+                      <div className="w-8 h-8 flex items-center justify-center mb-1">
+                        <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 21C16.9706 21 21 16.9706 21 12C21 7.02944 16.9706 3 12 3C7.02944 3 3 7.02944 3 12C3 14.5 4 16.5 6 18C8 19.5 11 18 11 15C11 12 9 10 7 12" />
+                        </svg>
+                      </div>
+                      <div className="flex flex-col items-center leading-[1]">
+                        <span className="text-white text-[11px] font-sans font-extrabold lowercase tracking-wide">airtel</span>
+                        <span className="text-[#FFCC00] text-[7px] font-semibold tracking-widest mt-0.5">Money</span>
+                      </div>
+                    </div>
+                  )
+                },
+                { 
+                  id: 'mpesa', 
+                  name: 'Vodacom M-Pesa', 
+                  icon: (
+                    <div className="bg-[#43B02A] relative rounded-xl w-full h-full flex flex-col items-center justify-center p-2 shadow-md hover:shadow-lg transition-all border border-green-600">
+                      <div className="w-8 h-8 flex items-center justify-center mb-1">
+                        <svg viewBox="0 0 24 24" className="w-7 h-7">
+                           <rect x="5" y="3" width="14" height="18" rx="3" fill="white" />
+                           <path d="M5 8 L19 8 L19 6 C19 4.34315 17.6569 3 16 3 L8 3 C6.34315 3 5 4.34315 5 6 L5 8 Z" fill="#E4002B" />
+                           <rect x="10" y="16" width="4" height="2" rx="1" fill="#43B02A" />
+                        </svg>
+                      </div>
+                      <div className="text-white text-[10px] font-sans font-black tracking-tight mt-0.5">
+                        M-Pesa
+                      </div>
+                    </div>
+                  )
+                }
+              ].map(pay => (
+                <div 
+                  key={pay.id} 
+                  onClick={() => setSelectedProvider(pay.id as 'mpesa' | 'airtel' | 'orange')}
+                  className={`flex items-center justify-center rounded-2xl border-2 transition-all cursor-pointer aspect-[1.1] relative overflow-hidden bg-white shadow-sm ${
+                    selectedProvider === pay.id 
+                    ? 'border-[#0057FF] scale-105 ring-4 ring-[#0057FF]/20 z-10' 
+                    : 'border-transparent hover:scale-[1.02]'
+                  }`}
+                >
+                  {pay.icon}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 space-y-6">
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -370,7 +450,7 @@ export const CheckoutScreen: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">N° de paiement (Orange, M-Pesa...)</label>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Numéro de paiement</label>
                     <input
                       type="tel"
                       value={editPhone}
@@ -431,7 +511,7 @@ export const CheckoutScreen: React.FC = () => {
                 ) : (
                   <>
                     <ShieldCheck className="w-5 h-5" />
-                    <span>Confirmer pour {Number(totalPrice + (totalPrice < 50000 ? 3000 : 0)).toLocaleString()} FC</span>
+                    <span>Paiement sécurisé</span>
                   </>
                 )}
               </div>

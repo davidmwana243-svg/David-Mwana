@@ -84,6 +84,7 @@ interface AuthContextType {
   maintenanceMode: boolean;
   maintenanceMessage: string;
   maintenanceChangelog: string[];
+  maintenanceLoaded: boolean;
   setMaintenance: (enabled: boolean, message?: string, changelog?: string[]) => Promise<void>;
   mergeAccounts: (targetEmail: string, otherUid: string) => Promise<void>;
 }
@@ -105,6 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     "Sauvegarde robuste avec timeouts réseau",
     "Optimisations de performance de la base de données"
   ]);
+  const [maintenanceLoaded, setMaintenanceLoaded] = useState(false);
 
   const isAdmin = React.useMemo(() => {
     return (
@@ -133,6 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           "Sauvegarde robuste avec timeouts réseau",
           "Optimisations de performance de la base de données"
         ]);
+        setMaintenanceLoaded(true);
       } else {
         // Enregistrer la valeur par défaut
         setDoc(maintenanceRef, {
@@ -143,10 +146,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             "Sauvegarde robuste avec timeouts réseau",
             "Optimisations de performance de la base de données"
           ]
-        }).catch((err) => console.warn("Failed to create default app_status doc", err));
+        }).then(() => {
+          if (isMounted) setMaintenanceLoaded(true);
+        }).catch((err) => {
+          console.warn("Failed to create default app_status doc", err);
+          if (isMounted) setMaintenanceLoaded(true);
+        });
       }
     }, (err) => {
       console.warn("Could not read maintenance status synchronously:", err);
+      if (isMounted) setMaintenanceLoaded(true);
     });
 
     return () => {
@@ -188,17 +197,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let isMounted = true;
     
-    // Safety timeout: if auth doesn't respond in 15s, stop loading to show the app
+    // Safety timeout: if auth/Firestore doesn't respond in 12s, stop loading to show the app
     const timer = setTimeout(() => {
       if (isMounted) {
+        console.warn("Auth initialization safety timeout reached. Continuing to render app.");
         setLoading(false);
       }
-    }, 15000);
+    }, 12000);
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!isMounted) return;
       
-      clearTimeout(timer);
       setUser(currentUser);
       
       if (currentUser) {
@@ -207,7 +216,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!isRegisteringRef.current) {
           const profileRef = doc(db, 'users', currentUser.uid);
           try {
-            const profileSnap = await getDoc(profileRef);
+            // Racing with a 10-second timeout to prevent stalling the entire page load
+            const fetchDocPromise = getDoc(profileRef);
+            const timeoutPromise = new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error('Firestore connection timeout')), 10000)
+            );
+            
+            const profileSnap = await Promise.race([fetchDocPromise, timeoutPromise]);
+            
             if (isMounted) {
               if (profileSnap.exists()) {
                 const data = { ...profileSnap.data() } as UserProfile;
@@ -290,7 +306,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             }
           } catch (error) {
-            console.error("Error fetching user profile", error);
+            console.error("Error fetching user profile:", error);
           }
         }
       } else {
@@ -300,7 +316,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       
-      if (isMounted) setLoading(false);
+      if (isMounted) {
+        clearTimeout(timer);
+        setLoading(false);
+      }
     });
 
     return () => {
@@ -504,7 +523,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProfile = React.useCallback(async (updatedData: Partial<UserProfile>, photo?: File, bypassEmailVerification?: boolean, forceOverwriteEmail?: boolean) => {
     if (!user || !profile) return;
 
-    const withTimeout = <T,>(promise: Promise<T>, timeoutMs = 12000, errorMessage = "Délai d'attente dépassé lors de l'action. Veuillez vérifier votre connexion réseau."): Promise<T> => {
+    const withTimeout = <T,>(promise: Promise<T>, timeoutMs = 60000, errorMessage = "Délai d'attente dépassé lors de l'action. Veuillez vérifier votre connexion réseau."): Promise<T> => {
       return Promise.race([
         promise,
         new Promise<never>((_, reject) => 
@@ -556,7 +575,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         emailVerificationSent = false;
       } else {
         try {
-          await withTimeout(updateEmail(user, targetEmail), 6000, "La mise à jour de l'adresse email a expiré.");
+          await withTimeout(updateEmail(user, targetEmail), 30000, "La mise à jour de l'adresse email a expiré.");
         } catch (authErr: any) {
           console.warn("Direct updateEmail failed, trying verifyBeforeUpdateEmail:", authErr);
           if (authErr.code === 'auth/requires-recent-login') {
@@ -564,7 +583,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           
           try {
-            await withTimeout(verifyBeforeUpdateEmail(user, targetEmail), 8000, "L'envoi de l'e-mail de confirmation a expiré.");
+            await withTimeout(verifyBeforeUpdateEmail(user, targetEmail), 30000, "L'envoi de l'e-mail de confirmation a expiré.");
             emailVerificationSent = true;
           } catch (verifyErr: any) {
             console.error("verifyBeforeUpdateEmail failed:", verifyErr);
@@ -593,14 +612,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Téléversement avec timeout réseau
         const snapshot = await withTimeout(
           uploadBytes(storageRef, photo),
-          12000,
+          45000,
           "Le téléchargement de l'image a expiré (Délai d'attente dépassé)."
         );
         
         // Récupération de l'URL avec timeout réseau
         photoUrl = await withTimeout(
           getDownloadURL(snapshot.ref),
-          8000,
+          30000,
           "La récupération du lien de l'image de profil a expiré."
         );
       } catch (uploadErr: any) {
@@ -668,7 +687,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         authUpdateData.photoURL = photoUrl;
       }
       try {
-        await withTimeout(updateAuthProfile(user, authUpdateData), 6000, "Mise à jour d'authentification expirée.");
+        await withTimeout(updateAuthProfile(user, authUpdateData), 30000, "Mise à jour d'authentification expirée.");
       } catch (authErr) {
         console.warn("Auth profile display update failed slightly or timed out", authErr);
       }
@@ -679,7 +698,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const profileRef = doc(db, 'users', user.uid);
     try {
-      await withTimeout(updateDoc(profileRef, finalFieldsToUpdate), 10000, "La sauvegarde de vos informations dans la base de données a expiré.");
+      await withTimeout(setDoc(profileRef, finalFieldsToUpdate, { merge: true }), 60000, "La sauvegarde de vos informations dans la base de données a expiré.");
       if (emailVerificationSent) {
         return { emailVerificationSent: true };
       }
@@ -693,7 +712,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const mergeAccounts = React.useCallback(async (targetEmail: string, otherUid: string) => {
     if (!user || !profile) return;
 
-    const withTimeout = <T,>(promise: Promise<T>, timeoutMs = 12000, errorMessage = "Délai dépassé lors de l'action."): Promise<T> => {
+    const withTimeout = <T,>(promise: Promise<T>, timeoutMs = 60000, errorMessage = "Délai dépassé lors de l'action."): Promise<T> => {
       return Promise.race([
         promise,
         new Promise<never>((_, reject) =>
@@ -765,7 +784,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Update the destination profile document
       if (Object.keys(mergedFields).length > 0) {
         console.log("Updating destination profile with merged fields:", mergedFields);
-        await withTimeout(updateDoc(destProfileRef, mergedFields), 8000, "La mise à jour du compte principal a expiré.");
+        await withTimeout(setDoc(destProfileRef, mergedFields, { merge: true }), 45000, "La mise à jour du compte principal a expiré.");
       }
 
       // 3. Move orders from source UID to destination UID
@@ -777,12 +796,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const orderRef = doc(db, 'orders', orderDoc.id);
         return updateDoc(orderRef, { userId: otherUid });
       });
-      await withTimeout(Promise.all(updatePromises), 12000, "Le transfert des commandes a expiré.");
+      await withTimeout(Promise.all(updatePromises), 60000, "Le transfert des commandes a expiré.");
       console.log(`Successfully migrated ${updatePromises.length} orders.`);
 
       // 4. Delete current temporary contact info to prevent duplication
       console.log(`Cleaning up source user profile document: ${sourceUid}`);
-      await withTimeout(deleteDoc(sourceProfileRef), 8000, "La suppression du profil temporaire a expiré.");
+      await withTimeout(deleteDoc(sourceProfileRef), 45000, "La suppression du profil temporaire a expiré.");
 
       // 5. Sign out current user
       await logout();
@@ -811,9 +830,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     maintenanceMode,
     maintenanceMessage,
     maintenanceChangelog,
+    maintenanceLoaded,
     setMaintenance,
     mergeAccounts
-  }), [user, profile, loading, isAdmin, signInWithPhone, signUpWithPhone, logout, toggleWishlist, updateProfile, sendPasswordReset, maintenanceMode, maintenanceMessage, maintenanceChangelog, setMaintenance, mergeAccounts]);
+  }), [user, profile, loading, isAdmin, signInWithPhone, signUpWithPhone, logout, toggleWishlist, updateProfile, sendPasswordReset, maintenanceMode, maintenanceMessage, maintenanceChangelog, maintenanceLoaded, setMaintenance, mergeAccounts]);
 
   return (
     <AuthContext.Provider value={value}>

@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import admin from 'firebase-admin';
 import jwt from 'jsonwebtoken';
-import { validateEmail, validatePassword } from '../utils/validation.js';
+import { validateEmail, validatePassword } from '../utils/validation';
+import { getDb } from '../firebase/index';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-fallback-secret-key';
 
@@ -139,8 +140,6 @@ export const verifyTokenStatus = async (req: Request, res: Response) => {
     user: (req as any).user,
   });
 };
-
-import { getDb } from '../firebase/index.js';
 
 export const deleteCustomer = async (req: Request, res: Response) => {
   const { uid } = req.params;

@@ -12,7 +12,7 @@ export const ProductDetailScreen: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { product, loading: isLoading } = useProduct(id!);
   const [selectedSize, setSelectedSize] = useState<string | undefined>(undefined);
-  const [showReviews, setShowReviews] = useState(false);
+  const [showReviews, setShowReviews] = useState(true);
 
   const { addToCart } = useCart();
   const { profile, toggleWishlist } = useAuth();

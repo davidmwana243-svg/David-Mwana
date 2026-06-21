@@ -44,7 +44,7 @@ export const CategoriesScreen: React.FC = () => {
         </div>
 
         <div 
-          onClick={() => window.open('https://wa.me/243852849473', '_blank')}
+          onClick={() => window.open(`https://wa.me/243852849473?text=${encodeURIComponent("Bonjour DavidSTORE ! Je souhaite obtenir des informations ou passer une commande.")}`, '_blank')}
           className="m-2 p-4 bg-white border border-gray-100 rounded-2xl flex items-center gap-4 cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
         >
           <div className="w-14 h-14 bg-green-500 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-green-100 text-white">

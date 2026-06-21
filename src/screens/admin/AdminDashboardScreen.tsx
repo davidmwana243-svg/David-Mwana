@@ -100,6 +100,8 @@ export const AdminDashboardScreen: React.FC = () => {
     }
   };
 
+  const lastCustomerCountRef = useRef<number>(0);
+
   useEffect(() => {
     setLoading(true);
     
@@ -109,7 +111,7 @@ export const AdminDashboardScreen: React.FC = () => {
       const fetched: Order[] = [];
       snapshot.forEach(docSnap => fetched.push(docSnap.data() as Order));
 
-      // Notification logic
+      // Notification logic for orders
       if (lastOrderCountRef.current !== 0 && fetched.length > lastOrderCountRef.current) {
         const newestOrder = fetched[0];
         if (newestOrder.status === 'payment_pending') {
@@ -135,7 +137,7 @@ export const AdminDashboardScreen: React.FC = () => {
     const unsubCustomers = onSnapshot(customersQuery, (snapshot) => {
       const fetched: UserProfile[] = [];
       snapshot.forEach(docSnap => {
-        const user = docSnap.data() as UserProfile;
+        const user = { id: docSnap.id, ...docSnap.data() } as UserProfile;
         const email = user.email || '';
         const photo = user.photoURL || user.photoUrl || '';
         const condition1 = email === '0995289355@davidstore.com' || email === 'davidmwana243@gmail.com';
@@ -144,6 +146,26 @@ export const AdminDashboardScreen: React.FC = () => {
           fetched.push(user);
         }
       });
+
+      // Notification logic for new clients
+      if (lastCustomerCountRef.current !== 0 && fetched.length > lastCustomerCountRef.current) {
+        // Sort by creation date to find the newest
+        const sorted = [...fetched].sort((a, b) => {
+          const dateA = a.createdAt || a.dateCreation || 0;
+          const dateB = b.createdAt || b.dateCreation || 0;
+          return (dateB as number) - (dateA as number);
+        });
+        
+        const newestClient = sorted[0];
+        showNotification(
+          "Nouveau Client !", 
+          `${newestClient.nom || newestClient.displayName || 'Un nouveau client'} vient de rejoindre DavidSTORE !`, 
+          'info'
+        );
+        playNotificationSound();
+      }
+      lastCustomerCountRef.current = fetched.length;
+
       setCustomers(fetched);
     });
 
@@ -414,10 +436,18 @@ export const AdminDashboardScreen: React.FC = () => {
             <Wrench className="w-5 h-5 text-orange-500" />
             <h3 className="text-lg font-bold text-gray-900">Mise à jour & Maintenance</h3>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`text-[10px] uppercase font-black px-2.5 py-1 rounded-full ${mMode ? "bg-orange-100 text-orange-600 animate-pulse border border-orange-200" : "bg-gray-100 text-gray-500 border border-gray-200"}`}>
-              {mMode ? "Drapeau d'update actif" : "Mode client normal"}
-            </span>
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] uppercase font-black px-2.5 py-1 rounded-full ${maintenanceMode ? "bg-green-100 text-green-600 border border-green-200" : "bg-gray-100 text-gray-500 border border-gray-200"}`}>
+                {maintenanceMode ? "Live: Écran actif" : "Live: Désactivé"}
+              </span>
+              <span className={`text-[10px] uppercase font-black px-2.5 py-1 rounded-full ${mMode ? "bg-orange-100 text-orange-600 animate-pulse border border-orange-200" : "bg-gray-100 text-gray-500 border border-gray-200"}`}>
+                {mMode ? "Drapeau d'update coché" : "Maintenance décochée"}
+              </span>
+            </div>
+            {(mMode !== maintenanceMode || mMessage !== maintenanceMessage || JSON.stringify(mChangelog) !== JSON.stringify(maintenanceChangelog)) && (
+              <span className="text-[9px] text-red-500 font-bold animate-bounce italic">Cliquez sur enregistrer pour appliquer !</span>
+            )}
           </div>
         </div>
 
@@ -548,8 +578,8 @@ export const AdminDashboardScreen: React.FC = () => {
                     <UserIcon size={18} />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">#{order.id.slice(-6)}</p>
-                    <p className="text-xs text-gray-500">{formatSafeDateShort(order.createdAt)}</p>
+                    <p className="text-sm font-bold text-gray-900">{order.userName || 'Client'}</p>
+                    <p className="text-[10px] text-gray-400 font-medium">#{order.id.slice(-6)} • {formatSafeDateShort(order.createdAt)}</p>
                   </div>
                 </div>
                 <div className="text-right">

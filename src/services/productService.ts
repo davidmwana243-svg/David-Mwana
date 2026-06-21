@@ -62,7 +62,7 @@ export const updateProduct = async (id: string, updates: Partial<Product>): Prom
   }
 
   try {
-    await updateDoc(productRef, finalUpdates);
+    await setDoc(productRef, finalUpdates, { merge: true });
     console.log("Product updated successfully in Firestore.");
   } catch (err) {
     console.error("Firestore updateDoc error:", err);

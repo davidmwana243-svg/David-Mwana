@@ -16,6 +16,9 @@ const projectId = process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId;
 const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
 const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
+export let adminDb: ReturnType<typeof getDb> | null = null;
+export let adminAuth: admin.auth.Auth | null = null;
+
 export function initializeFirebaseAdmin() {
   if (admin.apps.length === 0) {
     try {
@@ -38,6 +41,15 @@ export function initializeFirebaseAdmin() {
       console.error('Firebase Admin initialization error:', error);
     }
   }
+
+  if (admin.apps.length > 0) {
+    try {
+      adminDb = getDb();
+      adminAuth = admin.auth();
+    } catch (e) {
+      console.error('Could not obtain live references for adminDb/adminAuth:', e);
+    }
+  }
 }
 
 import { getFirestore } from 'firebase-admin/firestore';
@@ -50,5 +62,3 @@ export function getDb() {
   throw new Error('Firebase Admin is not initialized');
 }
 
-export const adminDb = admin.apps.length > 0 ? getDb() : null;
-export const adminAuth = admin.apps.length > 0 ? admin.auth() : null;

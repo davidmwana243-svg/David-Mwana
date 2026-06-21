@@ -11,6 +11,56 @@ export const EX_CATEGORIES: Category[] = [
 ];
 
 export const EX_PRODUCTS: Product[] = [
+  // Électronique populaires de l'accueil
+  {
+    id: 'pop-1',
+    name: 'Ordinateur portable HP EliteBook Pro',
+    description: 'Une bête de course pour les créateurs et les professionnels. Écran Retina 14 pouces, processeur i7 de nouvelle génération, 16 Go de RAM.',
+    price: 2125000,
+    imageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=500&q=80',
+    images: ['https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=500&q=80'],
+    category: 'electronics',
+    rating: 0,
+    reviewsCount: 0,
+    averageRating: 0,
+    totalReviews: 0,
+    stock: 12,
+    salesCount: 0,
+    createdAt: Date.now()
+  },
+  {
+    id: 'pop-2',
+    name: 'Smartphone Samsung Galaxy S24 Ultra',
+    description: 'Le summum de la technologie mobile. Autonomie exceptionnelle, puce IA de pointe, capteur photo stellaire 200 Mpx.',
+    price: 700000,
+    imageUrl: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=500&q=80',
+    images: ['https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=500&q=80'],
+    category: 'electronics',
+    rating: 0,
+    reviewsCount: 0,
+    averageRating: 0,
+    totalReviews: 0,
+    stock: 25,
+    salesCount: 0,
+    createdAt: Date.now()
+  },
+  {
+    id: 'pop-3',
+    name: 'Casque Bluetooth ANC Sony QuietComfort',
+    description: 'Réduction active du bruit de premier ordre, son de qualité studio, coussinets mémoires de forme isolants.',
+    price: 112500,
+    imageUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80',
+    images: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80'],
+    category: 'electronics',
+    rating: 0,
+    reviewsCount: 0,
+    averageRating: 0,
+    totalReviews: 0,
+    stock: 120,
+    salesCount: 0,
+    createdAt: Date.now()
+  },
+
   // Électronique
   {
     id: 'elec-1',
@@ -169,17 +219,36 @@ export const EX_PRODUCTS: Product[] = [
 
 export async function seedDatabase() {
   try {
+    // Force write accurate product data (without preset fake reviews/sales) to Firestore
+    if (localStorage.getItem('database_seeded_v3') !== 'true') {
+      const populars = EX_PRODUCTS.filter(p => p.id.startsWith('pop-'));
+      for (const prod of populars) {
+        await setDoc(doc(db, 'products', prod.id), prod, { merge: true });
+      }
+      
+      // Seed categories if not already present
+      for (const cat of EX_CATEGORIES) {
+        await setDoc(doc(db, 'categories', cat.id), cat, { merge: true });
+      }
+
+      // Overwrite general products with clean data
+      for (const prod of EX_PRODUCTS) {
+        await setDoc(doc(db, 'products', prod.id), prod, { merge: true });
+      }
+
+      localStorage.setItem('database_seeded_pop_v1', 'true');
+      localStorage.setItem('database_seeded', 'true');
+      localStorage.setItem('database_seeded_v3', 'true');
+      console.log("Database updated cleanly to V3 (zero mock reviews & zero sales).");
+    }
+
     // If local storage already recorded a successful seed, do not run again
     if (localStorage.getItem('database_seeded') === 'true') {
       return;
     }
 
-    // Attempting a quick check with a shorter timeout if possible, 
-    // but Firestore doesn't have an easy per-call timeout.
-    // We'll use getDocs and catch specific transient network errors.
     const prodsSnapshot = await getDocs(collection(db, 'products'));
     if (!prodsSnapshot.empty) {
-      // Products are already present, mark as seeded to avoid future overwrites
       localStorage.setItem('database_seeded', 'true');
       return;
     }

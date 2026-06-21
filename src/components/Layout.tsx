@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Compass, MessageSquare, ShoppingCart, User, Download, X } from 'lucide-react';
+import { Home, LayoutGrid, Heart, ClipboardList, User, Download, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useCart } from '../contexts/CartContext';
 import { cn } from '../utils/cn';
@@ -47,10 +47,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   const navItems = [
     { path: '/home', icon: Home, label: 'Accueil' },
-    { path: '/catalog', icon: Compass, label: 'Catalogue' },
-    { path: '/categories', icon: MessageSquare, label: 'Messages' },
-    { path: '/cart', icon: ShoppingCart, label: 'Panier', badge: totalItems },
-    { path: '/profile', icon: User, label: 'Profil' },
+    { path: '/categories', icon: LayoutGrid, label: 'Catégories' },
+    { path: '/wishlist', icon: Heart, label: 'Favoris' },
+    { path: '/orders', icon: ClipboardList, label: 'Commandes' },
+    { path: '/profile', icon: User, label: 'Compte' },
   ];
 
   // Hide nav on splash, onboarding, login, product, checkout, welcome, addresses
@@ -69,7 +69,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.95 }}
             className={cn(
-              "fixed z-50 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-[24px] p-4 shadow-2xl border border-orange-400/20 text-left",
+              "fixed z-50 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm bg-gradient-to-r from-[#002B7F] to-[#0057FF] text-white rounded-[24px] p-4 shadow-2xl border border-white/10 text-left",
               isHiddenNav ? "bottom-4" : "bottom-20"
             )}
           >
@@ -78,16 +78,16 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 <img src="/icon.png" alt="DavidSTORE" className="w-10 h-10 object-contain rounded-xl" />
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="font-extrabold text-xs tracking-tight uppercase font-mono text-orange-200">Installation</h4>
+                <h4 className="font-extrabold text-xs tracking-tight uppercase font-mono text-yellow-300">Installation</h4>
                 <h3 className="font-black text-sm tracking-tight mt-0.5">Installer l'application</h3>
-                <p className="text-[11px] text-orange-50 font-semibold leading-relaxed mt-1">
+                <p className="text-[11px] text-blue-50 font-semibold leading-relaxed mt-1">
                   Ajoutez DavidSTORE sur votre écran d'accueil pour y accéder en un clic et profiter de chargements ultra-rapides !
                 </p>
                 <div className="flex items-center gap-2 mt-3.5">
                   <button
                     type="button"
                     onClick={handleInstallClick}
-                    className="bg-white text-orange-600 hover:bg-orange-50 font-black text-[10px] tracking-wide px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer uppercase"
+                    className="bg-white text-[#002B7F] hover:bg-blue-50 font-black text-[10px] tracking-wide px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer uppercase"
                   >
                     <Download className="w-3.5 h-3.5 stroke-[2.5]" />
                     <span>INSTALLER</span>
@@ -95,7 +95,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                   <button
                     type="button"
                     onClick={handleDismiss}
-                    className="bg-orange-600/30 hover:bg-orange-600/50 text-white font-bold text-[10px] px-3.5 py-2.5 rounded-xl transition-all cursor-pointer"
+                    className="bg-white/20 hover:bg-white/30 text-white font-bold text-[10px] px-3.5 py-2.5 rounded-xl transition-all cursor-pointer"
                   >
                     Plus tard
                   </button>
@@ -104,7 +104,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <button 
                 type="button"
                 onClick={handleDismiss}
-                className="p-1 rounded-full hover:bg-white/10 text-orange-100 transition-colors cursor-pointer shrink-0"
+                className="p-1 rounded-full hover:bg-white/10 text-blue-100 transition-colors cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -135,7 +135,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
       <nav className="fixed bottom-0 w-full max-w-md bg-white border-t border-gray-200 z-50 left-1/2 -translate-x-1/2">
         <div className="flex justify-around items-center h-16">
-          {navItems.map(({ path, icon: Icon, label, badge }) => {
+          {navItems.map(({ path, icon: Icon, label }) => {
             const isActive = location.pathname === path;
             return (
               <Link
@@ -143,18 +143,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 to={path}
                 className={cn(
                   "flex flex-col items-center justify-center w-full h-full space-y-1 text-xs",
-                  isActive ? "text-orange-500" : "text-gray-500 hover:text-gray-900"
+                  isActive ? "text-[#0057FF]" : "text-gray-400 hover:text-gray-900"
                 )}
               >
                 <div className="relative">
-                  <Icon className="w-6 h-6" strokeWidth={isActive ? 2.5 : 2} />
-                  {badge !== undefined && badge > 0 && (
-                    <span className="absolute -top-1 -right-2 bg-orange-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
-                      {badge > 9 ? '9+' : badge}
-                    </span>
-                  )}
+                  <Icon className="w-5 h-5 transition-transform duration-200 active:scale-125" strokeWidth={isActive ? 2.5 : 2} />
                 </div>
-                <span className="font-medium">{label}</span>
+                <span className={cn("text-[10px] font-semibold tracking-tight transition-all", isActive ? "font-bold text-[#0057FF]" : "text-gray-400")}>{label}</span>
               </Link>
             );
           })}

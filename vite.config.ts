@@ -13,7 +13,7 @@ export default defineConfig(() => {
         registerType: 'autoUpdate', // Met à jour l'application automatiquement quand le code change
         injectRegister: 'inline',   // Injecte directement le script de service worker dans le build html
         devOptions: {
-          enabled: true             // Permet de tester et d'exécuter le Service Worker en mode de développement
+          enabled: false             // Désactivé en dev pour éviter le cache stagnant et les ChunkLoadErrors sous AI Studio
         },
         manifest: {
           name: 'DavidSTORE',       // Nom complet de l'application

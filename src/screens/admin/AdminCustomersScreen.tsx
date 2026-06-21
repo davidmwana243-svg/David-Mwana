@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Search, MoreVertical, Mail, Phone, ShoppingCart, ShieldAlert, X, Copy, Check, Trash2 } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { getCustomers } from '../../services/customerService';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { auth, db } from '../../config/firebase';
 import { UserProfile } from '../../models/types';
 import { formatSafeDateShort } from '../../utils/dateUtils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNotification } from '../../contexts/NotificationContext';
-import { auth } from '../../config/firebase';
 
 export const AdminCustomersScreen: React.FC = () => {
   const [customers, setCustomers] = useState<UserProfile[]>([]);
@@ -16,11 +16,39 @@ export const AdminCustomersScreen: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const { showNotification } = useNotification();
 
-  const fetchCust = async () => {
+  useEffect(() => {
     setIsLoading(true);
-    try {
-      const fetchedData = await getCustomers();
-      
+    
+    // Real-time customers listener
+    const q = collection(db, 'users');
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedData: UserProfile[] = [];
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        
+        // Use the same normalization logic as customerService.ts for consistency
+        const realPhone = data.telephone || data.phone || data.phoneNumber || '';
+        const realName = data.nom || data.displayName || (data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : '');
+        const defaultName = data.email ? `Client ${data.email.split('@')[0]}` : 'Utilisateur';
+        const actualName = realName || defaultName;
+        const creationDate = data.dateCreation || data.createdAt || Date.now();
+        const actualPhoto = data.photoURL || data.photoUrl || '';
+
+        fetchedData.push({
+          id: docSnap.id,
+          ...data,
+          nom: actualName,
+          displayName: actualName,
+          phone: realPhone,
+          telephone: realPhone,
+          phoneNumber: realPhone,
+          photoURL: actualPhoto,
+          photoUrl: actualPhoto,
+          createdAt: typeof creationDate === 'number' ? creationDate : Date.parse(creationDate) || Date.now(),
+          dateCreation: typeof creationDate === 'number' ? creationDate : Date.parse(creationDate) || Date.now(),
+        } as UserProfile);
+      });
+
       // Filter out duplicate/fake admin accounts
       const filtered = fetchedData.filter((user) => {
         const email = user.email || '';
@@ -30,16 +58,17 @@ export const AdminCustomersScreen: React.FC = () => {
         return !(condition1 || condition2);
       });
 
+      // Sort in-memory by creation date descending
+      filtered.sort((a, b) => b.createdAt - a.createdAt);
+      
       setCustomers(filtered);
-    } catch (err) {
-      console.error(err);
-    } finally {
       setIsLoading(false);
-    }
-  };
+    }, (error) => {
+      console.error("Customers sync error:", error);
+      setIsLoading(false);
+    });
 
-  useEffect(() => {
-    fetchCust();
+    return () => unsubscribe();
   }, []);
 
   const handleDeleteUser = async (customer: UserProfile) => {
@@ -54,10 +83,11 @@ export const AdminCustomersScreen: React.FC = () => {
         throw new Error("Impossible de supprimer cet utilisateur : identifiant introuvable.");
       }
       
-      const res = await fetch(`/api/auth/delete-user/${encodeURIComponent(customer.id)}`, {
-        method: 'POST',
+      const res = await fetch(`/api/auth/remove-client/${encodeURIComponent(customer.id)}`, {
+        method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
       
@@ -91,7 +121,6 @@ export const AdminCustomersScreen: React.FC = () => {
       
       showNotification('Succès', 'Client supprimé avec succès', 'success');
       setSelectedUserForDelete(null);
-      await fetchCust();
     } catch (err: any) {
       console.error("[AdminCustomersScreen] Erreur de suppression client:", err);
       showNotification('Échec de la suppression', err.message || "Une erreur est survenue.", 'error');
