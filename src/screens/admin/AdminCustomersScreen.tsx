@@ -84,7 +84,7 @@ export const AdminCustomersScreen: React.FC = () => {
       }
       
       const res = await fetch(`/api/auth/remove-client/${encodeURIComponent(customer.id)}`, {
-        method: 'DELETE',
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

@@ -47,8 +47,17 @@ export const isAdmin = (req: Request, res: Response, next: NextFunction) => {
 
   // Check custom claim in Firebase or role in custom JWT
   // Fallback: also check authorized admin emails if claims are missing
-  const authorizedAdmins = ['davstore4@gmail.com', 'davidmwana243@gmail.com'];
-  const isAuthorizedEmail = authorizedAdmins.includes(user?.email || '');
+  const authorizedAdmins = [
+    'davstore4@gmail.com', 
+    'davidmwana243@gmail.com', 
+    'davidmwana243@gmail.com',
+    '0995289355@davidstore.com'
+  ];
+  
+  const isAuthorizedEmail = authorizedAdmins.some(email => 
+    email?.toLowerCase() === user?.email?.toLowerCase() || 
+    email?.toLowerCase() === (user?.email || '').toLowerCase()
+  );
 
   if (user && (user.admin === true || user.role === 'admin' || isAuthorizedEmail)) {
     console.log('[AuthMiddleware] Admin access granted to:', user?.email);
