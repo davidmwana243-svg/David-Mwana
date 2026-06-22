@@ -85,7 +85,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({ currentImageUrl, onIma
         const storageRef = ref(storage, `products/${productId}/${timestamp}_${file.name}`);
         const uploadPromise = uploadBytes(storageRef, file);
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Le délai de téléchargement a expiré (60s). Vérifiez votre connexion ou assurez-vous que Firebase Storage est activé dans votre console Firebase.')), 15000)
+          setTimeout(() => reject(new Error('Le délai de téléchargement a expiré (30s). Vérifiez votre connexion ou assurez-vous que Firebase Storage est activé dans votre console Firebase.')), 30000)
         );
         
         await Promise.race([uploadPromise, timeoutPromise]);

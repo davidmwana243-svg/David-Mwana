@@ -216,16 +216,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!isRegisteringRef.current) {
           const profileRef = doc(db, 'users', currentUser.uid);
           try {
-            // Racing with a 10-second timeout to prevent stalling the entire page load
+            // Racing with a 15-second timeout to prevent stalling the entire page load
             const fetchDocPromise = getDoc(profileRef);
             const timeoutPromise = new Promise<never>((_, reject) => 
-              setTimeout(() => reject(new Error('Firestore connection timeout')), 10000)
+              setTimeout(() => reject(new Error('Firestore connection timeout')), 15000)
             );
             
-            const profileSnap = await Promise.race([fetchDocPromise, timeoutPromise]);
+            let profileSnap;
+            try {
+              profileSnap = await Promise.race([fetchDocPromise, timeoutPromise]);
+            } catch (failErr: any) {
+              if (failErr.message === 'Firestore connection timeout') {
+                console.warn("Profile fetch timed out, attempting to continue with minimal data if available.");
+                // We don't rethrow here, we'll try to handle it 
+              } else {
+                throw failErr;
+              }
+            }
             
             if (isMounted) {
-              if (profileSnap.exists()) {
+              if (profileSnap && profileSnap.exists()) {
                 const data = { ...profileSnap.data() } as UserProfile;
 
                 if (currentUser.email && currentUser.email.toLowerCase() !== data.email?.toLowerCase()) {
@@ -270,7 +280,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   };
                 });
               } else {
-                // If it doesn't exist and we are NOT registering, create a minimal default one
+                // If it doesn't exist (explicitly) OR we timed out, create a minimal local one
                 setProfile(prev => {
                   if (prev && prev.id === currentUser.uid) return prev;
                   
@@ -300,7 +310,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     photoURL: currentUser.photoURL || '', // French photo mapping
                   };
                   
-                  setDoc(profileRef, newProfile).catch(e => console.error("Error creating default profile doc", e));
+                  // ONLY save to Firestore if we are SURE it doesn't exist (profileSnap is defined but exists() is false)
+                  // If profileSnap is undefined, it means we timed out, and we should NOT overwrite remote data with a default profile.
+                  if (profileSnap) {
+                    setDoc(profileRef, newProfile).catch(e => console.error("Error creating default profile doc", e));
+                  } else {
+                    console.log("Using temporary local profile due to fetch timeout.");
+                  }
                   return newProfile;
                 });
               }
