@@ -27,7 +27,7 @@ const DEFAULT_PRODUCTS = [
 ];
 
 router.post('/chat', async (req, res) => {
-  const { message, history } = req.body;
+  const { message, history, products } = req.body;
 
   if (!message) {
     return res.status(400).json({ error: 'Message is required' });
@@ -38,68 +38,10 @@ router.post('/chat', async (req, res) => {
     return res.status(500).json({ error: "L'assistant n'est pas encore configuré. Veuillez contacter l'administrateur." });
   }
 
-  // 1. Fetch dynamic products list to pass to model context
+  // 1. Use products passed from client
   let productsToUse = DEFAULT_PRODUCTS;
-  let fetchedSuccessfully = false;
-
-  if (adminDb) {
-    try {
-      const snap = await adminDb.collection('products').get();
-      if (!snap.empty) {
-        productsToUse = snap.docs.map(doc => {
-          const d = doc.data();
-          return {
-            id: doc.id,
-            name: d.name || '',
-            price: d.price || 0,
-            category: d.category || '',
-            description: d.description || ''
-          };
-        });
-        fetchedSuccessfully = true;
-      }
-    } catch (err) {
-      console.warn('Could not fetch products from Firestore Admin for AI assistance, attempting REST fallback:', err);
-    }
-  }
-
-  if (!fetchedSuccessfully) {
-    try {
-      const projectId = "gen-lang-client-0356564841";
-      const databaseId = "ai-studio-35938330-505b-48a2-b260-abe577a0b5ce";
-      const apiKey = "AIzaSyAH0CHU-OmmqXXDL3LhU6MTPmmQCyvNmLE";
-      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/products?key=${apiKey}`;
-      
-      const response = await fetch(url);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.documents && Array.isArray(data.documents)) {
-          const restProds = data.documents.map((doc: any) => {
-            const fields = doc.fields || {};
-            const pathParts = doc.name.split('/');
-            const id = pathParts[pathParts.length - 1];
-            
-            return {
-              id,
-              name: fields.name?.stringValue || '',
-              price: Number(fields.price?.integerValue || fields.price?.doubleValue || fields.price?.stringValue || 0),
-              category: fields.category?.stringValue || '',
-              description: fields.description?.stringValue || ''
-            };
-          }).filter((p: any) => p.name);
-          
-          if (restProds.length > 0) {
-            productsToUse = restProds;
-            fetchedSuccessfully = true;
-            console.log(`Successfully fetched ${restProds.length} products for AI assistance via Public REST API.`);
-          }
-        }
-      } else {
-        console.warn(`REST fallback for products fetch failed with status: ${response.status}`);
-      }
-    } catch (restErr) {
-      console.error('REST fallback for products fetch failed entirely:', restErr);
-    }
+  if (products && Array.isArray(products) && products.length > 0) {
+    productsToUse = products;
   }
 
   const productsContextString = productsToUse.map(p => 
@@ -205,7 +147,7 @@ Ne donne pas d'ID imaginaires, utilise uniquement les ID de produits valides fou
     res.json({ text: result.text });
   } catch (error: any) {
     console.error('Error with Gemini API:', error);
-    res.status(500).json({ error: 'Désolé, Nicole rencontre un petit problème technique passager.' });
+    res.status(500).json({ error: 'Désolé, Nicole rencontre un petit problème technique passager.', details: error.message });
   }
 });
 

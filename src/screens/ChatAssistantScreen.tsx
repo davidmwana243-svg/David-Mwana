@@ -82,6 +82,14 @@ export const ChatAssistantScreen: React.FC = () => {
         parts: [{ text: msg.text }]
       }));
 
+      const productsContext = catalogProducts.map(p => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        category: p.category,
+        description: p.description
+      }));
+
       const response = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: {
@@ -89,7 +97,8 @@ export const ChatAssistantScreen: React.FC = () => {
         },
         body: JSON.stringify({
           message: messageText,
-          history
+          history,
+          products: productsContext
         })
       });
 
