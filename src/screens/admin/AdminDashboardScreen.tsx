@@ -9,7 +9,6 @@ import {
   User as UserIcon,
   RotateCcw,
   Clock,
-  Bell,
   Wrench,
   Plus,
   Trash2,
@@ -37,7 +36,6 @@ export const AdminDashboardScreen: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const lastOrderCountRef = useRef<number>(0);
   const [resetting, setResetting] = useState(false);
   const [origin, setOrigin] = useState<string>('');
   const { showNotification } = useNotification();
@@ -100,8 +98,6 @@ export const AdminDashboardScreen: React.FC = () => {
     }
   };
 
-  const lastCustomerCountRef = useRef<number>(0);
-
   useEffect(() => {
     setLoading(true);
     
@@ -109,21 +105,7 @@ export const AdminDashboardScreen: React.FC = () => {
     const ordersQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
     const unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
       const fetched: Order[] = [];
-      snapshot.forEach(docSnap => fetched.push(docSnap.data() as Order));
-
-      // Notification logic for orders
-      if (lastOrderCountRef.current !== 0 && fetched.length > lastOrderCountRef.current) {
-        const newestOrder = fetched[0];
-        if (newestOrder.status === 'payment_pending') {
-          showNotification(
-            "Nouvelle Commande !", 
-            `Client: ${newestOrder.userName} - ${newestOrder.total} FC`, 
-            'success'
-          );
-          playNotificationSound();
-        }
-      }
-      lastOrderCountRef.current = fetched.length;
+      snapshot.forEach(docSnap => fetched.push({ ...docSnap.data(), id: docSnap.id } as Order));
 
       setOrders(fetched);
       setLoading(false);
@@ -146,25 +128,6 @@ export const AdminDashboardScreen: React.FC = () => {
           fetched.push(user);
         }
       });
-
-      // Notification logic for new clients
-      if (lastCustomerCountRef.current !== 0 && fetched.length > lastCustomerCountRef.current) {
-        // Sort by creation date to find the newest
-        const sorted = [...fetched].sort((a, b) => {
-          const dateA = a.createdAt || a.dateCreation || 0;
-          const dateB = b.createdAt || b.dateCreation || 0;
-          return (dateB as number) - (dateA as number);
-        });
-        
-        const newestClient = sorted[0];
-        showNotification(
-          "Nouveau Client !", 
-          `${newestClient.nom || newestClient.displayName || 'Un nouveau client'} vient de rejoindre DavidSTORE !`, 
-          'info'
-        );
-        playNotificationSound();
-      }
-      lastCustomerCountRef.current = fetched.length;
 
       setCustomers(fetched);
     });
@@ -299,40 +262,6 @@ export const AdminDashboardScreen: React.FC = () => {
     }
   };
 
-  const playNotificationSound = () => {
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
-      
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); 
-      oscillator.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.5); 
-      
-      gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-      gainNode.gain.linearRampToValueAtTime(0.2, audioCtx.currentTime + 0.1);
-      gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-      
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + 0.5);
-      setTimeout(() => audioCtx.close(), 1000);
-    } catch (e) {
-      console.warn("Audio alert blocked by browser", e);
-    }
-  };
-
-  const testNotification = () => {
-    showNotification(
-      "DavidSTORE : Test Alerte", 
-      "Le système de notification est maintenant ACTIF ! ✅", 
-      'info'
-    );
-    playNotificationSound();
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -349,14 +278,6 @@ export const AdminDashboardScreen: React.FC = () => {
           <p className="text-gray-500 mt-1">Données réelles de votre boutique.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          <button
-            onClick={testNotification}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 rounded-xl font-bold text-sm transition-all active:scale-95"
-            title="Tester les notifications"
-          >
-            <Bell size={16} />
-            <span>Tester Alerte</span>
-          </button>
           <button
             onClick={handleResetDatabase}
             disabled={resetting}
@@ -579,7 +500,7 @@ export const AdminDashboardScreen: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-sm font-bold text-gray-900">{order.userName || 'Client'}</p>
-                    <p className="text-[10px] text-gray-400 font-medium">#{order.id.slice(-6)} • {formatSafeDateShort(order.createdAt)}</p>
+                    <p className="text-[10px] text-gray-400 font-medium">#{(order.id || '').slice(-6)} • {formatSafeDateShort(order.createdAt)}</p>
                   </div>
                 </div>
                 <div className="text-right">

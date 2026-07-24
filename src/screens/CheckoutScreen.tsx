@@ -120,42 +120,12 @@ export const CheckoutScreen: React.FC = () => {
   useEffect(() => {
     if (!currentOrderId || paymentStep !== 'waiting') return;
 
-    // SIMULATION: after 8.5 seconds, force local success & backend update for a seamless, fast test experience
-    const simulationTimer = setTimeout(async () => {
-      if (paymentStep === 'waiting') {
-        try {
-          // 1. Instantly transition local state to success for immediate user response
-          setPaymentStep('success');
-          clearCart();
-          showNotification(
-            "Paiement Accepté !", 
-            `DavidSTORE: Votre transaction de ${Number(totalPrice + (totalPrice < 50000 ? 3000 : 0) || 0).toLocaleString()} FC a été approuvée par code PIN.`, 
-            'success'
-          );
-
-          // 2. Schedule auto-redirection to my orders screen after 3 seconds
-          setTimeout(() => {
-            navigate('/orders');
-          }, 3000);
-
-          // 3. Update Firestore in background to maintain persistent state
-          const { updateDoc, doc } = await import('firebase/firestore');
-          await updateDoc(doc(db, 'orders', currentOrderId), {
-            status: 'processing',
-            paymentStatus: 'paid',
-            updatedAt: Date.now()
-          }).catch(err => console.warn("Firestore status update failed, handled gracefully:", err));
-        } catch (e) {
-          console.error("Simulation sequence error:", e);
-        }
-      }
-    }, 8500);
-
     // Listen for order status changes
     const unsub = onSnapshot(doc(db, 'orders', currentOrderId), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
-        if ((data.status === 'processing' || data.status === 'pending') && paymentStep !== 'success') {
+        // The order is only confirmed if the payment is successful (status is 'processing' or paymentStatus is 'paid')
+        if ((data.status === 'processing' || data.paymentStatus === 'paid') && paymentStep !== 'success') {
           setPaymentStep('success');
           clearCart();
           showNotification(
@@ -187,7 +157,6 @@ export const CheckoutScreen: React.FC = () => {
 
     return () => {
       unsub();
-      clearTimeout(simulationTimer);
     };
   }, [currentOrderId, paymentStep, clearCart, navigate, totalPrice, showNotification]);
 

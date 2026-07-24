@@ -12,6 +12,9 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'autoUpdate', // Met à jour l'application automatiquement quand le code change
         injectRegister: 'inline',   // Injecte directement le script de service worker dans le build html
+        workbox: {
+          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024 // 10MB
+        },
         devOptions: {
           enabled: false             // Désactivé en dev pour éviter le cache stagnant et les ChunkLoadErrors sous AI Studio
         },
@@ -25,12 +28,12 @@ export default defineConfig(() => {
           theme_color: '#2563eb',             // Couleur de la barre d'état sur mobile
           icons: [
             {
-              src: '/icon.png',               // Chemin vers votre logo dans le dossier 'public/'
+              src: 'https://i.postimg.cc/1tvrPKYb/file-00000000a4fc7243b5ae1ecdf23ff4f5.png',               // Logo distant DavidSTORE
               sizes: '192x192',
               type: 'image/png'
             },
             {
-              src: '/icon.png',
+              src: 'https://i.postimg.cc/1tvrPKYb/file-00000000a4fc7243b5ae1ecdf23ff4f5.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any maskable'

@@ -18,7 +18,8 @@
         "addresses": { "type": "array" },
         "createdAt": { "type": "number" },
         "preferredPaymentMethod": { "type": "string" },
-        "paymentPhone": { "type": "string" }
+        "paymentPhone": { "type": "string" },
+        "notificationsEnabled": { "type": "boolean" }
       },
       "required": ["id", "email", "displayName"]
     },
@@ -59,6 +60,22 @@
       },
       "required": ["reviewId", "productId", "rating", "createdAt"]
     },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notifications.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "telegramId": { "type": "string" },
+        "type": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "sentAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "telegramId", "type", "message", "status", "createdAt"]
+    },
     "Order": {
       "title": "Order",
       "description": "Customer orders.",
@@ -98,6 +115,17 @@
         "updatedAt": { "type": "number" }
       },
       "required": ["token", "userId", "updatedAt"]
+    },
+    "Cart": {
+      "title": "Cart",
+      "description": "User shopping cart.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "items": { "type": "array" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["userId", "items", "updatedAt"]
     }
   },
   "firestore": {
@@ -124,6 +152,14 @@
     "fcm_tokens/{tokenId}": {
       "schema": "FcmToken",
       "description": "FCM registration tokens mapping."
+    },
+    "carts/{cartId}": {
+      "schema": "Cart",
+      "description": "User shopping carts."
+    },
+    "notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications."
     }
   }
 }

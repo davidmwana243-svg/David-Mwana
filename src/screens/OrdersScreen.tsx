@@ -57,8 +57,10 @@ export const OrdersScreen: React.FC = () => {
     const initialRatings: Record<string, number> = {};
     const initialComments: Record<string, string> = {};
     order.items.forEach(item => {
-      initialRatings[item.product.id] = 5;
-      initialComments[item.product.id] = '';
+      if (item.product?.id) {
+        initialRatings[item.product.id] = 5;
+        initialComments[item.product.id] = '';
+      }
     });
     setReviewRatings(initialRatings);
     setReviewComments(initialComments);
@@ -388,7 +390,7 @@ export const OrdersScreen: React.FC = () => {
                     <div className="flex -space-x-2">
                       {order.items.slice(0, 3).map((item, idx) => (
                         <div key={idx} className="w-9 h-9 rounded-xl border-2 border-white overflow-hidden bg-gray-50 shadow-sm">
-                          <img src={item.imageUrl || item.product.imageUrl} alt="" className="w-full h-full object-cover" />
+                          <img src={item.imageUrl || item.product?.imageUrl || ''} alt="" className="w-full h-full object-cover" />
                         </div>
                       ))}
                       {order.items.length > 3 && (
@@ -409,7 +411,13 @@ export const OrdersScreen: React.FC = () => {
                   {/* Address brief card */}
                   <div className="flex items-start gap-1.5 text-xs text-gray-500">
                     <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
-                    <span className="line-clamp-1">{order.shippingAddress}</span>
+                    <span className="line-clamp-1">
+                      {typeof order.shippingAddress === 'object' && order.shippingAddress !== null ? (
+                        `${(order.shippingAddress as any).address || ''}${(order.shippingAddress as any).city ? `, ${(order.shippingAddress as any).city}` : ''}`
+                      ) : (
+                        order.shippingAddress
+                      )}
+                    </span>
                   </div>
 
                   {/* Pricing footer summary */}
@@ -735,7 +743,7 @@ export const OrdersScreen: React.FC = () => {
 
               <div className="flex-1 overflow-y-auto pr-1 space-y-4 py-1">
                 {reviewOrder.items.map((item) => {
-                  const prod = item.product;
+                  const prod = item.product || { id: 'unknown', name: 'Produit Inconnu', imageUrl: '', category: '' };
                   const isSubmitted = submittedReviews[prod.id];
                   const isSubmitting = isSubmittingReviews[prod.id];
                   const currentRating = reviewRatings[prod.id] || 5;

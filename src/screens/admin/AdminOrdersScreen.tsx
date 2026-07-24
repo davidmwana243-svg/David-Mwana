@@ -116,6 +116,7 @@ export const AdminOrdersScreen: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [isValidatingScan, setIsValidatingScan] = useState(false);
   const [scanSuccess, setScanSuccess] = useState(false);
+  const [manualPin, setManualPin] = useState('');
 
   // Real QR Camera scan refs & states for Deliverer
   const adminVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -243,7 +244,7 @@ export const AdminOrdersScreen: React.FC = () => {
     const unsub = onSnapshot(q, (snapshot) => {
       const fetched: Order[] = [];
       snapshot.forEach((docSnap) => {
-        fetched.push(docSnap.data() as Order);
+        fetched.push({ ...docSnap.data(), id: docSnap.id } as Order);
       });
 
       // Notify admin of NEW orders
@@ -399,6 +400,12 @@ export const AdminOrdersScreen: React.FC = () => {
     }, 1500);
   };
 
+  const handleManualPinConfirm = () => {
+    if (!selectedOrder || !manualPin) return;
+    triggerAdminRealScanSuccess(selectedOrder, manualPin.trim());
+    setManualPin('');
+  };
+
   const renderMockupQRCode = (payload: string) => {
     return (
       <div className="flex flex-col items-center p-5 bg-white border border-gray-100 rounded-3xl shadow-sm max-w-xs mx-auto">
@@ -469,18 +476,20 @@ export const AdminOrdersScreen: React.FC = () => {
                    </h3>
                    <div className="mt-4 pt-4 border-t border-gray-50 flex flex-col gap-2">
                      <span className="text-[10px] text-gray-400 uppercase font-black tracking-widest block">Articles Commandés</span>
-                     {selectedOrder.items.map((item, idx) => (
-                       <div key={item.product.id + idx} className="bg-gray-50 p-2.5 rounded-xl border border-gray-100 flex items-center justify-between">
+                     {selectedOrder.items.map((item, idx) => {
+                       const prod = item.product || { id: 'unknown_' + idx, name: 'Produit Inconnu', image: '', imageUrl: '', category: '' };
+                       return (
+                         <div key={prod.id + idx} className="bg-gray-50 p-2.5 rounded-xl border border-gray-100 flex items-center justify-between">
                          <div className="flex items-center gap-3">
                            <div className="w-8 h-8 bg-white rounded border border-gray-100 flex items-center justify-center overflow-hidden shrink-0">
-                             {item.product.image || item.product.imageUrl ? (
-                               <img src={item.product.image || item.product.imageUrl} referrerPolicy="no-referrer" alt="" className="w-full h-full object-cover" />
+                             {prod.image || prod.imageUrl ? (
+                               <img src={prod.image || prod.imageUrl} referrerPolicy="no-referrer" alt="" className="w-full h-full object-cover" />
                              ) : (
                                <Sparkles className="w-3 h-3 text-blue-200" />
                              )}
                            </div>
                            <div className="truncate">
-                             <p className="text-xs font-black text-gray-800 leading-tight truncate">{item.product.name}</p>
+                             <p className="text-xs font-black text-gray-800 leading-tight truncate">{prod.name}</p>
                              <div className="flex items-center gap-2 mt-0.5">
                                {item.selectedSize ? (
                                  <span className="text-[10px] text-orange-600 font-extrabold">Taille: {item.selectedSize}</span>
@@ -505,7 +514,8 @@ export const AdminOrdersScreen: React.FC = () => {
                            <span className="text-xs font-black text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg">x{item.quantity}</span>
                          </div>
                        </div>
-                     ))}
+                     );
+                      })}
                    </div>
                  </div>
 
@@ -574,7 +584,18 @@ export const AdminOrdersScreen: React.FC = () => {
                    <MapPin className="w-4.5 h-4.5 text-orange-500 shrink-0 mt-0.5" />
                    <div className="text-xs">
                      <p className="font-extrabold text-gray-700">Adresse Complète enregistrée :</p>
-                     <p className="text-gray-500 mt-1 leading-relaxed">{selectedOrder.shippingAddress}</p>
+                     <p className="text-gray-500 mt-1 leading-relaxed">
+                       {typeof selectedOrder.shippingAddress === 'object' && selectedOrder.shippingAddress !== null ? (
+                         <>
+                           {(selectedOrder.shippingAddress as any).address || ''}
+                           {(selectedOrder.shippingAddress as any).city ? `, ${(selectedOrder.shippingAddress as any).city}` : ''}
+                           {(selectedOrder.shippingAddress as any).fullName ? ` (Client: ${(selectedOrder.shippingAddress as any).fullName})` : ''}
+                           {(selectedOrder.shippingAddress as any).phone ? ` - Tél: ${(selectedOrder.shippingAddress as any).phone}` : ''}
+                         </>
+                       ) : (
+                         selectedOrder.shippingAddress
+                       )}
+                     </p>
                    </div>
                  </div>
                </div>
@@ -631,6 +652,21 @@ export const AdminOrdersScreen: React.FC = () => {
                    <Camera className="w-4 h-4" />
                    <span>SIMULER SCAN (TEST)</span>
                  </button>
+                 <div className="pt-3 border-t border-blue-200/50 space-y-2">
+                   <p className="text-[10px] uppercase font-bold text-blue-700 text-center tracking-widest">Saisie manuelle du PIN</p>
+                   <div className="flex items-center gap-2">
+                     <input 
+                       type="text" 
+                       value={manualPin}
+                       onChange={(e) => setManualPin(e.target.value)}
+                       placeholder="Ex: SECURE-TOK-..."
+                       className="flex-1 bg-white border border-blue-200 rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                     />
+                     <button onClick={handleManualPinConfirm} disabled={isValidatingScan || !manualPin} className="bg-blue-700 disabled:opacity-50 text-white p-2 rounded-lg cursor-pointer hover:bg-blue-800">
+                       <CheckCircle2 className="w-4 h-4" />
+                     </button>
+                   </div>
+                 </div>
                </div>
              )}
            </div>

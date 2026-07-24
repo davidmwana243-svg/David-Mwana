@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { db } from '../config/firebase';
+import { db } from '../firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { Product } from '../models/types';
+import { Product } from '../types';
 
 export const useProduct = (productId: string) => {
   const [product, setProduct] = useState<Product | null>(null);

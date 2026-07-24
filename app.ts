@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -13,6 +14,8 @@ import orderRoutes from './server/routes/orderRoutes';
 import aiRoutes from './server/routes/aiRoutes';
 import uploadRoutes from './server/routes/uploadRoutes';
 import paymentRoutes from './server/routes/paymentRoutes';
+import { handleCallback } from './server/controllers/paymentController';
+import { setLastKnownHostUrl } from './server/utils/hostStore';
 
 export async function createApp() {
   const app = express();
@@ -26,6 +29,14 @@ export async function createApp() {
   // Start background FCM Firestore triggers
   startNotificationListeners();
 
+  // Start Telegram Bot Daemon
+  try {
+    const { startTelegramBot } = await import('./telegram/bot');
+    startTelegramBot();
+  } catch (err) {
+    console.error('❌ [TG BOT] Failed to auto-start Telegram Bot:', err);
+  }
+
   // Basic middleware
   app.use(helmet({
     contentSecurityPolicy: false,
@@ -36,8 +47,20 @@ export async function createApp() {
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
   app.use(morgan('dev'));
 
+  // Capture real active host URL dynamically for payment gateway callback routing
+  app.use((req, res, next) => {
+    const host = req.get('host');
+    if (host) {
+      const url = `${req.protocol}://${host}`;
+      setLastKnownHostUrl(url).catch(err => {
+        console.error('[APP] Error saving last known host URL:', err);
+      });
+    }
+    next();
+  });
+
   // Static uploads directory serving
-  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+  app.use('/uploads', express.static(path.join('/tmp', 'uploads')));
 
   // Backend API Routes
   app.use('/api/auth', authRoutes);
@@ -45,6 +68,7 @@ export async function createApp() {
   app.use('/api/ai', aiRoutes);
   app.use('/api/upload', uploadRoutes);
   app.use('/api/payment', paymentRoutes);
+  app.post('/api/shwary/webhook', handleCallback);
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'API is running' });

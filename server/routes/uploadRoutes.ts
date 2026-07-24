@@ -13,7 +13,7 @@ router.post('/', async (req, res) => {
 
   try {
     // Check if the uploads folder exists, if not create it
-    const uploadsDir = path.join(process.cwd(), 'uploads');
+    const uploadsDir = path.join('/tmp', 'uploads');
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }

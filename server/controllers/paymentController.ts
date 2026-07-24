@@ -1,178 +1,23 @@
 import { Request, Response } from 'express';
 import { getDb } from '../firebase/index.js';
+import { processShwaryPayment, sanitizeDRCPhone } from '../services/shwaryService';
+
+export { processShwaryPayment, sanitizeDRCPhone };
 
 /**
  * Initiates a new payment transaction with Shwary payment gateway.
- * In case of missing credentials or API exceptions, it gracefully triggers a
- * simulated local payment to ensure the checkout/end-user flow remains uninterrupted.
  */
 export const initiatePayment = async (req: Request, res: Response) => {
   const { amount, clientPhoneNumber, orderId } = req.body;
-  const merchantKey = process.env.SHWARY_MERCHANT_KEY;
-  const merchantId = process.env.SHWARY_MERCHANT_ID;
-
-  // Sanitize phone number to standard format
-  const sanitizeDRCPhone = (phoneStr: string): string => {
-    let cl = (phoneStr || '').replace(/\s+/g, '').replace(/[-\(\)]/g, '');
-    if (cl.startsWith('+243')) {
-      cl = cl.substring(4);
-    } else if (cl.startsWith('243')) {
-      cl = cl.substring(3);
-    }
-    if (cl.startsWith('0')) {
-      cl = cl.substring(1);
-    }
-    return `+243${cl}`;
-  };
-
-  const formattedPhone = sanitizeDRCPhone(clientPhoneNumber);
-
-  // Generate the callback URL dynamically based on incoming request request hosts (Cloud Run public endpoints)
-  const callbackUrl = `${req.protocol}://${req.get('host')}/api/payment/callback`;
-
-  console.log('================================================================');
-  console.log('[SHWARY API] INITIATING TRANSACTION SESSION');
-  console.log(`- Order ID: ${orderId}`);
-  console.log(`- Client Phone (Raw): ${clientPhoneNumber}`);
-  console.log(`- Client Phone (Sanitized): ${formattedPhone}`);
-  console.log(`- Amount: ${amount} CDF`);
-  console.log(`- Dynamic Callback URL: ${callbackUrl}`);
-  console.log('- Credentials Present:', { 
-    merchantId: !!merchantId, 
-    merchantKey: !!merchantKey 
-  });
-  console.log('================================================================');
-
-  // Detect missing or dummy configuration placeholders
-  const isDummyConfig = !merchantKey || !merchantId || 
-                        merchantKey.toLowerCase().includes('placeholder') || 
-                        merchantId.toLowerCase().includes('placeholder') ||
-                        merchantKey === 'YOUR_KEY' || merchantId === 'YOUR_ID';
-
-  if (isDummyConfig) {
-    console.warn('[SHWARY API] Missing or placeholder credentials.');
-    return res.status(400).json({
-      error: "Le service de paiement n'est pas encore configuré. Veuillez renseigner des identifiants Shwary valides ou d'API."
-    });
-  }
+  const hostUrl = `${req.protocol}://${req.get('host')}`;
 
   try {
-    // Set an abort controller to prevent hanging connection issues
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-    const gatewayUrl = 'https://api.shwary.com/api/v1/merchants/payment/DRC';
-    console.log(`[SHWARY API] Posting request to Shwary Gateway: ${gatewayUrl}`);
-
-    const payload = {
-      amount,
-      clientPhoneNumber: formattedPhone,
-      callbackUrl,
-      orderId 
-    };
-
-    const response = await fetch(gatewayUrl, {
-      method: 'POST',
-      headers: {
-        'x-merchant-key': merchantKey,
-        'x-merchant-id': merchantId,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    const text = await response.text();
-    console.log(`[SHWARY API] Shwary HTTP Status Response: ${response.status}`);
-    console.log(`[SHWARY API] Shwary Response Raw Data: ${text}`);
-
-    if (!response.ok) {
-      console.warn(`[SHWARY API] Gateway error status from Shwary: ${response.status}`);
-      
-      // Parse response to find if a suggested/retriable alternative transaction amount was sent
-      if (response.status === 422) {
-        try {
-          const errObj = JSON.parse(text);
-          const errMsg = errObj.message || '';
-          
-          // Regex matching: "we can instead process \s*([0-9.]+)"
-          const match = errMsg.match(/we can instead process\s+([0-9.]+)/i);
-          if (match && match[1]) {
-            let recommendedAmount = parseFloat(match[1]);
-            if (!isNaN(recommendedAmount) && recommendedAmount > 0) {
-              if (recommendedAmount < 100) {
-                console.log(`[SHWARY API] Small recommended amount (${recommendedAmount}) detected. Converting from USD to CDF using exchange rate of 2800...`);
-                recommendedAmount = Math.ceil(recommendedAmount * 2800);
-              }
-              console.log(`[SHWARY API] Corrective Trigger: Shwary suggested a different amount. Retrying with adjusted amount: ${recommendedAmount} CDF...`);
-              
-              const retryPayload = {
-                amount: recommendedAmount,
-                clientPhoneNumber: formattedPhone,
-                callbackUrl,
-                orderId
-              };
-              
-              // New short-circuit abort signal
-              const retryController = new AbortController();
-              const retryTimeoutId = setTimeout(() => retryController.abort(), 8000);
-              
-              const retryResponse = await fetch(gatewayUrl, {
-                method: 'POST',
-                headers: {
-                  'x-merchant-key': merchantKey!,
-                  'x-merchant-id': merchantId!,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(retryPayload),
-                signal: retryController.signal
-              });
-              
-              clearTimeout(retryTimeoutId);
-              
-              const retryText = await retryResponse.text();
-              console.log(`[SHWARY API] Retried Request Status: ${retryResponse.status}`);
-              console.log(`[SHWARY API] Retried Request Response: ${retryText}`);
-              
-              if (retryResponse.ok) {
-                const retryData = JSON.parse(retryText);
-                console.log('[SHWARY API] Alternate transaction completed successfully via auto-retry.', retryData);
-                return res.json(retryData);
-              } else {
-                console.warn(`[SHWARY API] Retry also failed with status: ${retryResponse.status}`);
-                return res.status(retryResponse.status).json({
-                  error: `La passerelle de paiement Shwary a retourné une erreur (Statut ${retryResponse.status}) lors de l'initiation de rattrapage: ${retryText}`
-                });
-              }
-            }
-          }
-        } catch (parseErr) {
-          console.error('[SHWARY API] Could not extract recommended retry options from 422 error details:', parseErr);
-        }
-      }
-      
-      return res.status(response.status).json({
-        error: `La passerelle de paiement Shwary a retourné une erreur (Statut ${response.status}): ${text}`
-      });
-    }
-
-    try {
-      const data = JSON.parse(text);
-      console.log('[SHWARY API] Payment initiated successfully.', data);
-      return res.json(data);
-    } catch (parseError) {
-      console.error('[SHWARY API] Parse error on response:', parseError);
-      return res.status(500).json({
-        error: "Impossible de déchiffrer la réponse de la passerelle Shwary.",
-        rawResponse: text
-      });
-    }
+    const result = await processShwaryPayment(amount, clientPhoneNumber, orderId, hostUrl);
+    return res.json(result);
   } catch (error: any) {
-    console.error('[SHWARY API] Error during payment initiation:', error?.message || error);
+    console.error('[SHWARY WEB API] Error during payment initiation:', error?.message || error);
     return res.status(500).json({
-      error: `Une erreur réseau ou d'exécution est survenue lors de l'initiation du paiement: ${error?.message || String(error)}`
+      error: error?.message || "Une erreur est survenue lors de l'initiation du paiement."
     });
   }
 };
@@ -198,22 +43,41 @@ export const handleCallback = async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Database uninitialized' });
     }
 
-    const { 
-      status, 
-      id, 
-      referenceId, 
-      orderId, 
-      amount, 
-      currency, 
-      recipientPhoneNumber,
-      userId 
-    } = req.body;
+    // Support both flat req.body fields and nested fields inside a "data" or "payload" property
+    const body = req.body || {};
+    const nestedData = body.data || {};
+    const nestedPayload = body.payload || {};
+
+    const status = body.status ?? nestedData.status ?? nestedPayload.status;
+    const id = body.id ?? nestedData.id ?? nestedPayload.id;
+    const referenceId = body.referenceId ?? nestedData.referenceId ?? nestedPayload.referenceId ?? body.reference_id ?? nestedData.reference_id ?? nestedPayload.reference_id;
+    const orderId = body.orderId ?? nestedData.orderId ?? nestedPayload.orderId ?? body.order_id ?? nestedData.order_id ?? nestedPayload.order_id;
+    const reference = body.reference ?? nestedData.reference ?? nestedPayload.reference;
+    const transaction_id = body.transaction_id ?? nestedData.transaction_id ?? nestedPayload.transaction_id;
+    const transactionId = body.transactionId ?? nestedData.transactionId ?? nestedPayload.transactionId;
+    const amount = body.amount ?? nestedData.amount ?? nestedPayload.amount;
+    const currency = body.currency ?? nestedData.currency ?? nestedPayload.currency;
+    const recipientPhoneNumber = body.recipientPhoneNumber ?? nestedData.recipientPhoneNumber ?? nestedPayload.recipientPhoneNumber ?? body.phone ?? nestedData.phone ?? nestedPayload.phone ?? body.clientPhoneNumber ?? nestedData.clientPhoneNumber ?? nestedPayload.clientPhoneNumber;
+    const userId = body.userId ?? nestedData.userId ?? nestedPayload.userId;
 
     // Normalizing values
     const inputStatus = (status || '').toString().trim().toLowerCase();
     
     // 1. Resolve candidate identifier
-    const primaryIdCandidate = orderId || referenceId || id;
+    const actualTransactionId = id || transaction_id || transactionId;
+    const primaryIdCandidate = orderId || referenceId || reference || actualTransactionId;
+
+    console.log('[SHWARY WEBHOOK] Extracted Fields Details for Diagnostics:');
+    console.log(`  - status: "${status}" (normalized: "${inputStatus}")`);
+    console.log(`  - id: "${id}"`);
+    console.log(`  - referenceId: "${referenceId}"`);
+    console.log(`  - orderId: "${orderId}"`);
+    console.log(`  - reference: "${reference}"`);
+    console.log(`  - transaction_id: "${transaction_id}"`);
+    console.log(`  - transactionId: "${transactionId}"`);
+    console.log(`  - actualTransactionId: "${actualTransactionId}"`);
+    console.log(`  - primaryIdCandidate: "${primaryIdCandidate}"`);
+
     if (!primaryIdCandidate) {
       console.warn('[SHWARY WEBHOOK] No recognizable identifier found in payload (orderId, referenceId, id are empty).');
       return res.status(200).json({ 
@@ -228,12 +92,12 @@ export const handleCallback = async (req: Request, res: Response) => {
     let orderDocSnap = null;
 
     // Search Mode A: Check if candidate ID is a direct document key in the 'orders' table
-    const directDocRef = db.collection('orders').doc(primaryIdCandidate);
+    const directDocRef = db.collection('orders').doc(String(primaryIdCandidate));
     const directSnap = await directDocRef.get();
     if (directSnap.exists) {
       orderDocRef = directDocRef;
       orderDocSnap = directSnap;
-      console.log(`[SHWARY WEBHOOK] Match found directly using ID: ${primaryIdCandidate}`);
+      console.log(`[SHWARY WEBHOOK] Match found directly using ID as document key: ${primaryIdCandidate}`);
     }
 
     // Search Mode B: Try stripping the merchant prefix if formatted as "merchant-orderId"
@@ -249,13 +113,14 @@ export const handleCallback = async (req: Request, res: Response) => {
       }
     }
 
-    // Search Mode C: Scan recent 'orders' where custom fields match
+    // Search Mode C: Scan 'orders' where custom fields match candidate
     if (!orderDocRef) {
-      console.log(`[SHWARY WEBHOOK] Document key lookup failed. Running collection queries to find matching referenceId...`);
+      console.log(`[SHWARY WEBHOOK] Document key lookup failed. Running collection queries to find matching referenceId or field values...`);
       
-      const fieldsToQuery = ['orderId', 'referenceId', 'shwaryTransactionId'];
+      const fieldsToQuery = ['orderId', 'referenceId', 'shwaryTransactionId', 'id', 'reference', 'qrToken'];
       for (const field of fieldsToQuery) {
         if (!orderDocRef) {
+          console.log(`[SHWARY WEBHOOK] Searching collection where field "${field}" == "${primaryIdCandidate}"`);
           const querySnap = await db.collection('orders')
             .where(field, '==', primaryIdCandidate)
             .limit(1)
@@ -264,7 +129,7 @@ export const handleCallback = async (req: Request, res: Response) => {
           if (!querySnap.empty) {
             orderDocRef = querySnap.docs[0].ref;
             orderDocSnap = querySnap.docs[0];
-            console.log(`[SHWARY WEBHOOK] Match found in Firestore collection where ${field} == ${primaryIdCandidate}`);
+            console.log(`[SHWARY WEBHOOK] Match found in Firestore collection where field "${field}" == "${primaryIdCandidate}"`);
             break;
           }
         }
@@ -273,6 +138,25 @@ export const handleCallback = async (req: Request, res: Response) => {
 
     if (!orderDocRef || !orderDocSnap) {
       console.warn(`[SHWARY WEBHOOK] No document matches found in orders collection for ID candidate "${primaryIdCandidate}".`);
+      
+      try {
+        const recentOrdersSnap = await db.collection('orders').orderBy('createdAt', 'desc').limit(5).get();
+        if (!recentOrdersSnap.empty) {
+          console.log('[SHWARY WEBHOOK] DIAGNOSTIC: 5 most recent orders in Firestore to assist troubleshooting:');
+          recentOrdersSnap.docs.forEach(doc => {
+            const data = doc.data();
+            console.log(`  - Order ID: "${doc.id}"`);
+            console.log(`    * status: "${data.status}", paymentStatus: "${data.paymentStatus}"`);
+            console.log(`    * userId: "${data.userId || 'none'}"`);
+            console.log(`    * userName: "${data.userName || 'none'}", userPhone: "${data.userPhone || 'none'}"`);
+          });
+        } else {
+          console.log('[SHWARY WEBHOOK] DIAGNOSTIC: The orders collection is currently empty.');
+        }
+      } catch (err: any) {
+        console.warn('[SHWARY WEBHOOK] DIAGNOSTIC failed to fetch recent orders list:', err?.message || err);
+      }
+
       return res.status(200).json({ 
         status: 'not_found', 
         message: `Order reference ${primaryIdCandidate} does not exist in localized system. Callback logged but skipped.` 
@@ -281,11 +165,14 @@ export const handleCallback = async (req: Request, res: Response) => {
 
     // 2. Map Payment Status
     let dbPaymentStatus = 'pending';
-    let dbOrderStatus = 'payment_pending';
+    let dbOrderStatus = 'pending';
     let failureReason = '';
 
-    const isSuccess = ['success', 'completed', 'approved', 'paid'].includes(inputStatus);
-    const isFailed = ['failed', 'cancelled', 'error', 'insufficient_balance', 'failed_empty_balance'].includes(inputStatus);
+    const isSuccess = ['success', 'successful', 'completed', 'approved', 'paid'].includes(inputStatus);
+    const isFailed = ['failed', 'refused', 'declined', 'cancelled', 'error', 'insufficient_balance', 'failed_empty_balance'].includes(inputStatus);
+
+    // Extract failureReason if present in the payload (top-level or nested)
+    const failureReasonPayload = body.failureReason ?? nestedData.failureReason ?? nestedPayload.failureReason ?? body.reason ?? nestedData.reason ?? nestedPayload.reason;
 
     if (isSuccess) {
       dbPaymentStatus = 'paid';
@@ -294,15 +181,16 @@ export const handleCallback = async (req: Request, res: Response) => {
       dbPaymentStatus = 'failed';
       dbOrderStatus = 'cancelled';
       
-      // Determine the precise error reason returned from Shwary
-      if (inputStatus === 'insufficient_balance' || inputStatus === 'failed_empty_balance') {
+      if (failureReasonPayload) {
+        failureReason = failureReasonPayload;
+      } else if (inputStatus === 'insufficient_balance' || inputStatus === 'failed_empty_balance') {
         failureReason = 'Solde insuffisant sur le portefeuille de dépôt.';
       } else {
-        failureReason = req.body.failureReason || 'Paiement annulé par le client ou décliné par l\'opérateur.';
+        failureReason = 'Paiement annulé par le client ou décliné par l\'opérateur.';
       }
     } else if (inputStatus === 'pending') {
       dbPaymentStatus = 'pending';
-      dbOrderStatus = 'payment_pending';
+      dbOrderStatus = 'pending';
     }
 
     console.log('[SHWARY WEBHOOK] Status Mapping Determined:', {
@@ -320,8 +208,9 @@ export const handleCallback = async (req: Request, res: Response) => {
       completedAt: Date.now()
     };
 
-    if (id) {
-      updateData.shwaryTransactionId = id;
+    if (actualTransactionId) {
+      updateData.shwaryTransactionId = actualTransactionId;
+      updateData.transaction_id = actualTransactionId;
     }
     if (failureReason) {
       updateData.failureReason = failureReason;
@@ -330,6 +219,36 @@ export const handleCallback = async (req: Request, res: Response) => {
     console.log(`[SHWARY WEBHOOK] Updating Firestore Document (${orderDocRef.id}) with values:`, updateData);
     await orderDocRef.update(updateData);
     console.log(`⚡ [SHWARY WEBHOOK] Document ${orderDocRef.id} updated successfully.`);
+
+    // Trigger Telegram notification to the user if the order has an associated Telegram user
+    try {
+      const orderData = orderDocSnap.data() || {};
+      const totalAmount = orderData.total || amount || 0;
+      
+      const userDocRef = db.collection('users').doc(orderData.userId);
+      const userSnap = await userDocRef.get();
+      let telegramId = '';
+      if (userSnap.exists) {
+        telegramId = userSnap.data()?.telegramId || '';
+      }
+      
+      if (telegramId && (isSuccess || isFailed)) {
+        console.log(`[SHWARY WEBHOOK] Direct Telegram client detected (${telegramId}). Sending callback message...`);
+        const { sendTelegramNotification } = await import('../../telegram/bot');
+        
+        const message = isSuccess 
+          ? `✅ *Paiement confirmé !*\n\nCommande : *#${orderDocRef.id}*\n\n💰 Montant payé : *${totalAmount.toLocaleString('fr-FR')}* CDF\n\n📦 Votre commande est maintenant en préparation.`
+          : `❌ *Échec du paiement*\n\nCommande : *#${orderDocRef.id}*\n\n💰 Montant : *${totalAmount.toLocaleString('fr-FR')}* CDF\n\nRaison : _${failureReason || 'Délai d\'attente dépassé ou solde insuffisant'}_`;
+
+        await sendTelegramNotification(
+          telegramId,
+          message,
+          isSuccess ? 'payment_success' : 'payment_failed'
+        );
+      }
+    } catch (tgNotificationErr: any) {
+      console.error('[SHWARY WEBHOOK] Failed to dispatch Telegram notification:', tgNotificationErr?.message || tgNotificationErr);
+    }
 
     // 4. Send standard HTTP 200 response
     return res.status(200).json({

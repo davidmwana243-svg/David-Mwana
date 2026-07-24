@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { db } from '../config/firebase';
+import { db } from '../firebase';
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { Review } from '../models/types';
+import { Review } from '../types';
 
 export const useProductReviews = (productId: string) => {
   const [reviews, setReviews] = useState<Review[]>([]);

@@ -12,6 +12,7 @@ export const ProductDetailScreen: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { product, loading: isLoading } = useProduct(id!);
   const [selectedSize, setSelectedSize] = useState<string | undefined>(undefined);
+  const [selectedColor, setSelectedColor] = useState<string | undefined>(undefined);
   const [showReviews, setShowReviews] = useState(true);
 
   const { addToCart } = useCart();
@@ -74,8 +75,8 @@ export const ProductDetailScreen: React.FC = () => {
   }
 
   const handleAddToCart = () => {
-    addToCart(product, 1, selectedSize);
-    showNotification("Panier", `Produit ${selectedSize ? `(Taille: ${selectedSize}) ` : ''}ajouté au panier avec succès.`, "success");
+    addToCart(product, 1, selectedSize, selectedColor);
+    showNotification("Panier", `Produit ${selectedSize ? `(Taille: ${selectedSize}) ` : ''}${selectedColor ? `(Couleur: ${selectedColor}) ` : ''}ajouté au panier avec succès.`, "success");
   };
 
   const isFavorited = profile?.wishlist?.includes(product.id) || false;
@@ -165,6 +166,39 @@ export const ProductDetailScreen: React.FC = () => {
         </div>
       )}
 
+      {/* Color options */}
+      {product.colors && product.colors.length > 0 && (
+        <div className="bg-white p-4 mb-2 shadow-sm">
+          <div className="flex justify-between items-center mb-3">
+            <span className="font-bold text-gray-900 text-sm">Choisir la couleur</span>
+            {selectedColor && (
+              <span className="text-xs bg-orange-100 text-orange-600 font-bold px-2 py-0.5 rounded-full font-sans">
+                Couleur : {selectedColor}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {product.colors.map((color) => {
+              const active = selectedColor === color;
+              return (
+                <button
+                  key={color}
+                  onClick={() => setSelectedColor(color)}
+                  type="button"
+                  className={`px-4 py-2 border rounded-xl text-sm font-semibold transition-all duration-200 cursor-pointer ${
+                    active
+                      ? 'border-orange-500 bg-orange-500 text-white shadow-md shadow-orange-500/20 scale-105'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  {color}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Description */}
       <div className="bg-white p-4 mb-2 shadow-sm">
         <h3 className="font-bold text-gray-900 mb-2">Description</h3>
@@ -218,7 +252,7 @@ export const ProductDetailScreen: React.FC = () => {
           variant="primary"
           className="flex-1 py-3.5 text-sm sm:text-base font-bold shadow-lg shadow-orange-500/40 font-sans"
           onClick={() => {
-            addToCart(product, 1, selectedSize);
+            addToCart(product, 1, selectedSize, selectedColor);
             navigate('/checkout');
           }}
         >

@@ -11,7 +11,7 @@ import {
   Search,
   Menu
 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 
 export const AdminLayout: React.FC = () => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -21,6 +21,7 @@ export const AdminLayout: React.FC = () => {
   const MENU_ITEMS = [
     { path: '/admin', icon: LayoutDashboard, label: 'Tableau de bord' },
     { path: '/admin/products', icon: Package, label: 'Produits' },
+    { path: '/admin/categories', icon: Settings, label: 'Catégories' },
     { path: '/admin/orders', icon: ShoppingCart, label: 'Commandes' },
     { path: '/admin/customers', icon: Users, label: 'Clients' },
   ];

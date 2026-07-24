@@ -1,6 +1,7 @@
 import express from 'express';
 import { GoogleGenAI } from "@google/genai";
 import { adminDb } from '../firebase/index';
+import { EX_PRODUCTS } from '../../src/services/mockData';
 
 const router = express.Router();
 
@@ -14,18 +15,6 @@ const ai = new GoogleGenAI({
   }
 });
 
-const DEFAULT_PRODUCTS = [
-  { id: 'elec-1', name: 'Casque sans fil à réduction de bruit Pro', price: 185000, category: 'Électronique', description: 'Casque sans fil haut de gamme avec réduction active du bruit et autonomie de 40 heures.' },
-  { id: 'elec-2', name: 'Montre analogique intelligente GT', price: 95000, category: 'Électronique', description: 'Montre minimaliste élégante avec capteurs de santé et notifications intelligentes.' },
-  { id: 'elec-3', name: 'Enceinte Bluetooth Waterproof X', price: 65000, category: 'Électronique', description: 'Enceinte portable étanche IPX7 avec un son stéréo puissant.' },
-  { id: 'men-1', name: 'Veste en Jean délavée Classic', price: 85000, category: 'Mode Homme', description: 'Veste en denim haut de gamme au look intemporel.' },
-  { id: 'men-2', name: 'Chemise Slim-fit en Coton Premium', price: 45000, category: 'Mode Homme', description: 'Chemise en coton haute performance, respirante et facile à repasser.' },
-  { id: 'women-1', name: 'Robe d\'été Fleurie Bohème', price: 75000, category: 'Mode Femme', description: 'Robe longue, légère et fluide avec d\'élégants motifs floraux.' },
-  { id: 'women-2', name: 'Trench-Coat Élégant d\'Automne', price: 135000, category: 'Mode Femme', description: 'Imperméable coupe-vent classique avec ceinture.' },
-  { id: 'kids-1', name: 'Ensemble Pyjama Coton Confort', price: 35000, category: 'Enfants', description: 'Ensemble pyjama super doux en coton 100% biologique.' },
-  { id: 'shoes-1', name: 'Baskets de Course Ultra-Light', price: 110000, category: 'Chaussures', description: 'Chaussures de running ultra légères et confortables.' }
-];
-
 router.post('/chat', async (req, res) => {
   const { message, history, products } = req.body;
 
@@ -38,107 +27,97 @@ router.post('/chat', async (req, res) => {
     return res.status(500).json({ error: "L'assistant n'est pas encore configuré. Veuillez contacter l'administrateur." });
   }
 
-  // 1. Use products passed from client
-  let productsToUse = DEFAULT_PRODUCTS;
-  if (products && Array.isArray(products) && products.length > 0) {
-    productsToUse = products;
+  // Use products passed from client, or fetch from DB / default catalog
+  let productsToUse = Array.isArray(products) && products.length > 0 ? products : [];
+
+  if (productsToUse.length === 0) {
+    try {
+      if (adminDb) {
+        const snapshot = await adminDb.collection('products').get();
+        if (!snapshot.empty) {
+          productsToUse = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch products from adminDb for AI assistant context:', err);
+    }
   }
 
-  const productsContextString = productsToUse.map(p => 
-    `- [ID: ${p.id}] "${p.name}" - Prix: ${Number(p.price).toLocaleString('fr-FR')} FC (Catégorie: ${p.category}). Description: ${p.description}`
-  ).join('\n');
+  if (productsToUse.length === 0) {
+    productsToUse = EX_PRODUCTS;
+  }
+
+  const productsContextString = productsToUse.length > 0 
+    ? productsToUse.map(p => 
+        `- [ID: ${p.id}] "${p.name}" - Prix: ${Number(p.price).toLocaleString('fr-FR')} FC (Catégorie: ${p.category}). Description: ${p.description}`
+      ).join('\n')
+    : "LE CATALOGUE EST ACTUELLEMENT VIDE. Aucun produit n'est disponible à la vente pour le moment.";
 
   try {
-    const chat = ai.chats.create({
-      model: "gemini-3.5-flash",
-      config: {
-        systemInstruction: `Tu es "DavidSTORE AI", l'assistant de vente officiel de la boutique DavidSTORE.
+    const modelName = process.env.GEMINI_MODEL || "gemini-flash-latest";
+    let result;
+    try {
+      const chat = ai.chats.create({
+        model: modelName,
+        config: {
+          systemInstruction: `Tu es "Nicole", l'assistante virtuelle officielle de DavidSTORE.
+ 
+ Ton rôle unique est d'aider les clients en te basant EXCLUSIVEMENT sur les données fournies ci-dessous.
+ 
+ ━━━━━━━━━━━━━━━━━━━━
+ 📦 CATALOGUE RÉEL (SOURCE UNIQUE DE VÉRITÉ)
+ ━━━━━━━━━━━━━━━━━━━━
+ Voici la LISTE EXACTE et COMPLÈTE des produits actuellement en stock chez DavidSTORE. 
+ SI UN PRODUIT N'EST PAS DANS CETTE LISTE, IL N'EXISTE PAS.
+ 
+ ${productsContextString}
+ 
+ ⚠️ RÈGLES CRITIQUES SUR LA DISPONIBILITÉ :
+ 1. INTERDICTION FORMELLE d'inventer, d'imaginer ou de mentionner des produits qui ne sont pas dans la liste ci-dessus.
+ 2. Si le catalogue indiqué ci-dessus est "VIDE", tu dois IMPÉRATIVEMENT dire au client que la boutique est en cours de réapprovisionnement et qu'aucun article n'est disponible pour le moment.
+ 3. Ne mentionne jamais de produits que tu "penses" que DavidSTORE pourrait vendre s'ils ne sont pas listés explicitement.
+ 4. Si un client demande un produit supprimé ou inexistant, réponds : "Désolé, cet article n'est plus disponible dans notre catalogue actuel."
+ 
+ ━━━━━━━━━━━━━━━━━━━━
+ 💬 COMPORTEMENT & STYLE
+ ━━━━━━━━━━━━━━━━━━━━
+ - Ton nom est Nicole.
+ - Tu es polie, professionnelle et chaleureuse.
+ - Tu aides les clients à trouver des produits, réponds sur les zones de livraison (Haut-Katanga uniquement) et guides vers l'achat.
+ - Utilise des emojis avec parcimonie (🛍️, ✨, 🚚).
+ 
+ ━━━━━━━━━━━━━━━━━━━━
+ 🚀 RECOMMANDATIONS INTELLIGENTES
+ ━━━━━━━━━━━━━━━━━━━━
+ Lorsque tu mentionnes un produit du catalogue, insère TOUJOURS sa balise de recommandation pour l'interface : [RECOMMEND:ID_PRODUIT].
+ Exemple : "Nous avons de superbes baskets ! [RECOMMEND:shoes-1]"`,
+          temperature: 0.1,
+        },
+        history: history || []
+      });
 
-Ton rôle est de gérer une boutique e-commerce via WhatsApp en utilisant les données Firebase.
-
-━━━━━━━━━━━━━━━━━━━━
-📦 1. PRODUITS (Firebase)
-━━━━━━━━━━━━━━━━━━━━
-Les produits viennent uniquement de Firebase (collection: "produits"). Voici le catalogue actuel :
-${productsContextString}
-
-Chaque produit contient :
-- id
-- nom
-- prix
-- description
-- stock
-
-❗ Ne jamais inventer un produit.
-
-━━━━━━━━━━━━━━━━━━━━
-🛒 2. COMMANDE (Firebase)
-━━━━━━━━━━━━━━━━━━━━
-Les commandes doivent être enregistrées dans la collection "commandes" avec :
-- clientPhone
-- produits
-- total
-- status = "pending"
-- date
-
-Avant de créer une commande :
-✔ confirmer le produit avec le client
-✔ demander validation si nécessaire
-
-(Note interne : Guide le client pour qu'il passe à l'achat via l'application)
-
-━━━━━━━━━━━━━━━━━━━━
-💬 3. COMPORTEMENT CHAT
-━━━━━━━━━━━━━━━━━━━━
-- Si le client écrit "produits" → afficher le catalogue
-- Si le client écrit un numéro → interpréter comme choix produit
-- Si le client demande prix → répondre clairement
-- Si le client veut acheter → guider étape par étape
-- Si le client est confus → simplifier les explications
-
-━━━━━━━━━━━━━━━━━━━━
-🧠 4. STYLE DE RÉPONSE
-━━━━━━━━━━━━━━━━━━━━
-- messages courts et clairs
-- ton professionnel + vendeur
-- emojis légers (🛍️📦✅💰)
-- pas de phrases longues inutiles
-
-━━━━━━━━━━━━━━━━━━━━
-🎯 5. OBJECTIF BUSINESS
-━━━━━━━━━━━━━━━━━━━━
-Transformer chaque conversation en vente.
-
-Ton objectif est :
-✔ aider le client
-✔ proposer des produits
-✔ finaliser des commandes
-✔ augmenter les ventes de DavidSTORE
-
-━━━━━━━━━━━━━━━━━━━━
-⚠️ 6. RÈGLES IMPORTANTES
-━━━━━━━━━━━━━━━━━━━━
-- ne jamais inventer de produits
-- ne jamais mentir sur les prix
-- toujours utiliser Firebase comme source unique
-- ne jamais créer de commande sans produit valide
-- toujours rester simple et efficace
-
-━━━━━━━━━━━━━━━━━━━━
-🚀 7. MODE INTELLIGENT
-━━━━━━━━━━━━━━━━━━━━
-Si le client dit ce qu’il veut (ex: téléphone, chaussures, etc.), tu dois recommander automatiquement les meilleurs produits disponibles.
-
-DIRECTIVE ESSENTIELLE DE RECOMMANDATION (TRÈS IMPORTANT) :
-Lorsque tu mentionnes, suggères ou recommandes un produit existant dans notre catalogue ci-dessus, tu dois IMPÉRATIVEMENT insérer de manière naturelle l'identifiant exact du produit sous la forme de cette balise : [RECOMMEND:ID_PRODUIT] à la fin de la phrase ou du paragraphe concerné.
-Par exemple : "Ce casque est excellent ! [RECOMMEND:elec-1]".
-Ne donne pas d'ID imaginaires, utilise uniquement les ID de produits valides fournis ci-dessus. Notre interface de chat décodera automatiquement ces balises pour afficher les fiches produits interactives !`,
-        temperature: 0.7,
-      },
-      history: history || []
-    });
-
-    const result = await chat.sendMessage({ message });
+      result = await chat.sendMessage({ message });
+    } catch (primaryErr: any) {
+      console.warn('Primary Gemini model failed, trying fallback model:', primaryErr?.message || primaryErr);
+      const fallbackChat = ai.chats.create({
+        model: "gemini-2.5-flash",
+        config: {
+          systemInstruction: `Tu es "Nicole", l'assistante virtuelle officielle de DavidSTORE.
+ 
+ Ton rôle unique est d'aider les clients en te basant EXCLUSIVEMENT sur les données fournies ci-dessous.
+ 
+ ━━━━━━━━━━━━━━━━━━━━
+ 📦 CATALOGUE RÉEL (SOURCE UNIQUE DE VÉRITÉ)
+ ━━━━━━━━━━━━━━━━━━━━
+ ${productsContextString}
+ 
+ Ton nom est Nicole. Tu es polie, professionnelle et chaleureuse.`,
+          temperature: 0.1,
+        },
+        history: history || []
+      });
+      result = await fallbackChat.sendMessage({ message });
+    }
     
     if (!result || !result.text) {
       throw new Error('Empty response from AI');

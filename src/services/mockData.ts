@@ -1,6 +1,6 @@
 import { doc, setDoc, getDocs, collection } from 'firebase/firestore';
-import { db } from '../config/firebase';
-import { Product, Category } from '../models/types';
+import { db } from '../firebase';
+import { Product, Category } from '../types';
 
 export const EX_CATEGORIES: Category[] = [
   { id: 'electronics', name: 'Électronique', icon: 'Smartphone', imageUrl: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=400&q=80' },

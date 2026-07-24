@@ -40,6 +40,8 @@ export const CatalogScreen: React.FC = () => {
   const [selectedFilter, setSelectedFilter] = useState<string>('recom');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [categoriesLoaded, setCategoriesLoaded] = useState<boolean>(false);
+  const [productsLoaded, setProductsLoaded] = useState<boolean>(false);
   
   // Custom interactive animations states
   const [addedProductId, setAddedProductId] = useState<string | null>(null);
@@ -47,41 +49,57 @@ export const CatalogScreen: React.FC = () => {
   useEffect(() => {
     setIsLoading(true);
 
-    // Initial load for categories
-    getCategories().then(cats => setCategories(cats)).catch(console.error);
+    // Load categories
+    getCategories().then(cats => {
+      const seen = new Set<string>();
+      const uniqueCats: Category[] = [];
+      cats.forEach(c => {
+        if (c && c.id && !seen.has(c.id)) {
+          seen.add(c.id);
+          uniqueCats.push(c);
+        }
+      });
+      setCategories(uniqueCats);
+      setCategoriesLoaded(true);
+    }).catch(console.error);
 
     // Real-time products listener
     const q = collection(db, 'products');
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const prods: Product[] = [];
       snapshot.forEach(docSnap => {
-        prods.push(docSnap.data() as Product);
+        prods.push({ ...docSnap.data(), id: docSnap.id } as Product);
       });
-
-      if (prods.length === 0) {
-        setProducts([]);
-      } else {
-        const seen = new Set<string>();
-        const uniqueProds: Product[] = [];
-        prods.forEach(p => {
-          if (p && p.id && !seen.has(p.id)) {
-            seen.add(p.id);
-            uniqueProds.push(p);
-          }
-        });
-        setProducts(uniqueProds.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
-      }
-      setIsLoading(false);
+      
+      const uniqueProds: Product[] = [];
+      const seen = new Set<string>();
+      prods.forEach(p => {
+        if (p && p.id && !seen.has(p.id)) {
+          seen.add(p.id);
+          uniqueProds.push(p);
+        }
+      });
+      
+      const sortedProds = uniqueProds.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      
+      setProducts(sortedProds);
+      setProductsLoaded(true);
     }, (error) => {
       console.error("Real-time products listing failed, falling back to static fetch", error);
       getProducts().then(prods => {
         setProducts(prods);
-        setIsLoading(false);
+        setProductsLoaded(true);
       });
     });
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (categoriesLoaded && productsLoaded) {
+      setIsLoading(false);
+    }
+  }, [categoriesLoaded, productsLoaded]);
 
   const handleAddToCart = (product: Product, e: React.MouseEvent) => {
     e.preventDefault();
@@ -254,7 +272,9 @@ export const CatalogScreen: React.FC = () => {
           >
             🌟 Tout voir
           </button>
-          {categories.map((cat) => {
+          {categories
+            .filter(cat => products.some(p => p.category === cat.id))
+            .map((cat) => {
             const emojis: Record<string, string> = {
               'electronics': '💻 Électronique',
               'men_clothing': '👕 Hommes',
@@ -284,7 +304,7 @@ export const CatalogScreen: React.FC = () => {
         {isLoading ? (
           <div className="grid grid-cols-2 gap-4">
             {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="bg-white rounded-[20px] aspect-[1/1.45] border border-gray-100 p-3 space-y-3 animate-pulse">
+              <div key={`skeleton-${i}`} className="bg-white rounded-[20px] aspect-[1/1.45] border border-gray-100 p-3 space-y-3 animate-pulse">
                 <div className="w-full h-[65%] bg-gray-100 rounded-[15px]" />
                 <div className="h-4 bg-gray-100 rounded w-4/5" />
                 <div className="h-3 bg-gray-100 rounded w-1/2" />

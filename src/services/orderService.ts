@@ -1,6 +1,6 @@
 import { collection, getDocs, doc, setDoc, query, orderBy, where, updateDoc, getDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
-import { Order, CartItem, UserAddress } from '../models/types';
+import { db, auth } from '../firebase';
+import { Order, CartItem, UserAddress } from '../types';
 
 // Coordinates parsing utility simulating customer addresses in Haut-Katanga to demonstrate Google Maps tracking
 export interface DRCAddressDetails {
@@ -211,6 +211,30 @@ export const getUserOrders = async (userId: string): Promise<Order[]> => {
 };
 
 export const updateOrderStatus = async (orderId: string, status: Order['status']): Promise<void> => {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    console.log('[CLIENT] Sending request to backend /api/orders/admin/'+orderId+'/status with token', token?.substring(0, 10));
+    if (token) {
+      const res = await fetch(`/api/orders/admin/${orderId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status })
+      });
+      console.log('[CLIENT] API response status:', res.status);
+      if (res.ok) {
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      console.error('[CLIENT] API returned error:', data);
+    }
+  } catch (err) {
+    console.error('Failed to update via API, falling back to direct db update', err);
+  }
+  
+  console.log('[CLIENT] Falling back to direct update for order', orderId);
   const orderRef = doc(db, 'orders', orderId);
   await updateDoc(orderRef, { status });
 };

@@ -46,7 +46,7 @@ export const HomeScreen: React.FC = () => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const prods: Product[] = [];
       snapshot.forEach((docSnap) => {
-        prods.push(docSnap.data() as Product);
+        prods.push({ ...docSnap.data(), id: docSnap.id } as Product);
       });
       
       if (prods.length === 0) {

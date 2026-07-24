@@ -1,5 +1,5 @@
 import React from 'react';
-import { Product } from '../models/types';
+import { Product } from '../types';
 import { Link } from 'react-router-dom';
 import { Star } from 'lucide-react';
 

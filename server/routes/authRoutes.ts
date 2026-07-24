@@ -20,6 +20,7 @@ router.post('/reset-password', resetPassword);
 // Protected routes
 router.get('/verify', verifyToken, verifyTokenStatus);
 router.post('/remove-client/:uid', verifyToken, isAdmin, deleteCustomer);
+router.delete('/customers/:uid', verifyToken, isAdmin, deleteCustomer);
 router.get('/admin-only', verifyToken, isAdmin, (req, res) => {
   res.json({ message: 'Welcome, Admin!' });
 });

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../../config/firebase';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../firebase';
 import { Camera, Link as LinkIcon, X, Check, Loader2, AlertCircle } from 'lucide-react';
 
 interface ImageUploadProps {
@@ -83,13 +83,15 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({ currentImageUrl, onIma
         
         // Fallback to Firebase Storage
         const storageRef = ref(storage, `products/${productId}/${timestamp}_${file.name}`);
-        const uploadPromise = uploadBytes(storageRef, file);
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Le délai de téléchargement a expiré (30s). Vérifiez votre connexion ou assurez-vous que Firebase Storage est activé dans votre console Firebase.')), 30000)
-        );
+        const uploadTask = uploadBytesResumable(storageRef, file);
         
-        await Promise.race([uploadPromise, timeoutPromise]);
-        downloadUrl = await getDownloadURL(storageRef);
+        downloadUrl = await new Promise((resolve, reject) => {
+          uploadTask.on('state_changed', 
+            (snapshot) => {}, 
+            (error) => reject(error), 
+            () => getDownloadURL(uploadTask.snapshot.ref).then(resolve).catch(reject)
+          );
+        });
       }
       
       onImageUploaded(downloadUrl);
@@ -97,19 +99,18 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({ currentImageUrl, onIma
       setSuccess(true);
       setError(null);
     } catch (err: any) {
-      console.error("Storage upload error:", err);
-      setError(err.message || "Échec du téléchargement. Essayez d'utiliser une URL d'image à la place.");
+      console.error("Image upload failed:", err);
+      setError("Échec du téléchargement. Veuillez vérifier votre connexion ou réessayer.");
       setSuccess(false);
     } finally {
       setUploading(false);
     }
   };
 
-  const handleUrlBlur = () => {
-    if (urlInput && urlInput !== currentImageUrl) {
-      setPreviewUrl(urlInput);
-      onImageUploaded(urlInput);
-    }
+  const handleUrlChange = (value: string) => {
+    setUrlInput(value);
+    setPreviewUrl(value || null);
+    onImageUploaded(value);
   };
 
   return (
@@ -182,8 +183,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({ currentImageUrl, onIma
               type="text"
               placeholder="https://example.com/image.jpg"
               value={urlInput}
-              onChange={(e) => setUrlInput(e.target.value)}
-              onBlur={handleUrlBlur}
+              onChange={(e) => handleUrlChange(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500"
             />
           </div>

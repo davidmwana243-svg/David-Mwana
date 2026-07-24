@@ -1,21 +1,16 @@
 import { collection, getDocs, doc, getDoc, query, where, orderBy, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../config/firebase';
-import { Product, Category } from '../models/types';
+import { db, storage } from '../firebase';
+import { Product, Category } from '../types';
 import { EX_PRODUCTS, EX_CATEGORIES } from './mockData';
 
 export const getProducts = async (): Promise<Product[]> => {
   try {
     const snapshot = await getDocs(collection(db, 'products'));
     if (snapshot.empty) {
-      if (localStorage.getItem('database_seeded') === 'true') {
-        return []; // Truly empty, user deleted everything or cleared the catalog
-      }
-      return EX_PRODUCTS;
+      return [];
     }
-    // Since there are items in Firestore, the database is active and seeded
-    localStorage.setItem('database_seeded', 'true');
-    const prods = snapshot.docs.map(doc => doc.data() as Product);
+    const prods = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Product));
     const seen = new Set<string>();
     const uniqueProds: Product[] = [];
     prods.forEach(p => {
@@ -26,8 +21,8 @@ export const getProducts = async (): Promise<Product[]> => {
     });
     return uniqueProds.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   } catch (error) {
-    console.warn('Falling back to mock products due to error: ', error);
-    return EX_PRODUCTS;
+    console.error('Error fetching products: ', error);
+    return [];
   }
 };
 
@@ -82,30 +77,59 @@ export const getProductById = async (id: string): Promise<Product | null> => {
     if (snapshot.exists()) {
       return snapshot.data() as Product;
     }
-    return EX_PRODUCTS.find(p => p.id === id) || null;
+    return null;
   } catch (error) {
-    return EX_PRODUCTS.find(p => p.id === id) || null;
+    console.error('Error fetching product by ID:', error);
+    return null;
   }
 };
 
 export const getCategories = async (): Promise<Category[]> => {
   try {
     const snapshot = await getDocs(collection(db, 'categories'));
-    if (snapshot.empty) return EX_CATEGORIES;
-    return snapshot.docs.map(doc => doc.data() as Category);
+    if (snapshot.empty) return [];
+    const cats = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Category));
+    const seen = new Set<string>();
+    const uniqueCats: Category[] = [];
+    cats.forEach(c => {
+      if (c && c.id && !seen.has(c.id)) {
+        seen.add(c.id);
+        uniqueCats.push(c);
+      }
+    });
+    return uniqueCats;
   } catch (error) {
-    return EX_CATEGORIES;
+    console.error('Error fetching categories:', error);
+    return [];
   }
+};
+
+export const addCategory = async (category: Omit<Category, 'id'>): Promise<Category> => {
+  const newCatRef = doc(collection(db, 'categories'));
+  const id = newCatRef.id;
+  const newCat: Category = { ...category, id };
+  await setDoc(newCatRef, newCat);
+  return newCat;
+};
+
+export const updateCategory = async (id: string, updates: Partial<Category>): Promise<void> => {
+  const catRef = doc(db, 'categories', id);
+  await setDoc(catRef, updates, { merge: true });
+};
+
+export const deleteCategory = async (id: string): Promise<void> => {
+  await deleteDoc(doc(db, 'categories', id));
 };
 
 export const getProductsByCategory = async (categoryId: string): Promise<Product[]> => {
   try {
     const q = query(collection(db, 'products'), where('category', '==', categoryId));
     const snapshot = await getDocs(q);
-    if (snapshot.empty) return EX_PRODUCTS.filter(p => p.category === categoryId);
+    if (snapshot.empty) return [];
     return snapshot.docs.map(doc => doc.data() as Product);
   } catch (error) {
-    return EX_PRODUCTS.filter(p => p.category === categoryId);
+    console.error('Error fetching products by category:', error);
+    return [];
   }
 };
 

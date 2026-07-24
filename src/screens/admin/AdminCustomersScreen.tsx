@@ -91,32 +91,26 @@ export const AdminCustomersScreen: React.FC = () => {
         }
       });
       
-      let text = '';
-      try {
-        text = await res.text();
-        console.log(`[AdminCustomersScreen] Serveur Body: ${text.substring(0, 500)}`);
-      } catch (e) {
-        console.error("Impossible de lire le corps de la réponse.");
-      }
+      const text = await res.text();
+      console.log(`[AdminCustomersScreen] Response: ${text.substring(0, 200)}`);
 
-      const contentType = res.headers.get("content-type");
       let data: any = {};
-      
       try {
-        if (text) {
-          data = JSON.parse(text);
-        }
+        if (text) data = JSON.parse(text);
       } catch (e) {
-        console.error("Erreur de parsing JSON:", text);
+        console.error("JSON parse error:", text);
       }
 
       if (!res.ok) {
-        throw new Error(data.message || `Erreur serveur (Statut ${res.status}): ${text.substring(0, 100)}`);
+        // If we got HTML (starts with <), it's probably a proxy error
+        if (text.trim().startsWith('<')) {
+          throw new Error(`Le serveur a renvoyé une erreur de sécurité (403 Forbidden). Veuillez contacter le support.`);
+        }
+        throw new Error(data.message || `Erreur serveur (${res.status})`);
       }
 
-      if (!data.success && data.message) {
-        // Au cas où res.ok est vrai mais success est false
-        throw new Error(data.message);
+      if (data.success === false) {
+        throw new Error(data.message || "La suppression a échoué.");
       }
       
       showNotification('Succès', 'Client supprimé avec succès', 'success');

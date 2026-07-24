@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Home, LayoutGrid, Heart, ClipboardList, User, Download, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
-import { useCart } from '../contexts/CartContext';
+import { useCart } from '../context/CartContext';
 import { cn } from '../utils/cn';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -53,9 +53,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     { path: '/profile', icon: User, label: 'Compte' },
   ];
 
-  // Hide nav on splash, onboarding, login, product, checkout, welcome, addresses
+  // Hide nav on splash, onboarding, login, register, product, checkout, welcome, addresses
   const isHiddenNav = 
-    ['/', '/splash', '/onboarding', '/welcome', '/login', '/checkout', '/addresses'].includes(location.pathname) || 
+    ['/', '/splash', '/onboarding', '/welcome', '/login', '/register', '/checkout', '/addresses'].some(p => location.pathname === p || location.pathname === p + '/') || 
     location.pathname.startsWith('/product/');
 
   const renderPwaBanner = () => {
@@ -74,7 +74,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             )}
           >
             <div className="flex items-start gap-3">
-              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shrink-0 shadow-md">
+              <div className="w-12 h-12 bg-[#020714] rounded-2xl flex items-center justify-center shrink-0 shadow-md">
                 <img src="/icon.png" alt="DavidSTORE" className="w-10 h-10 object-contain rounded-xl" />
               </div>
               <div className="flex-1 min-w-0">

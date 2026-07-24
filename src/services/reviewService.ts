@@ -1,10 +1,10 @@
-import { db } from "../config/firebase";
+import { db } from "../firebase";
 import { 
   collection, 
   doc, 
   runTransaction 
 } from "firebase/firestore";
-import { Review, Product } from "../models/types";
+import { Review, Product } from "../types";
 
 export const addReview = async (review: Omit<Review, 'reviewId' | 'createdAt'>) => {
   const reviewsRef = collection(db, "reviews");

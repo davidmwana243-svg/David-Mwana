@@ -25,6 +25,7 @@ export const AdminProductsScreen: React.FC = () => {
   const [category, setCategory] = useState('c1');
   const [imageUrl, setImageUrl] = useState('');
   const [sizesInput, setSizesInput] = useState('');
+  const [colorsInput, setColorsInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -62,6 +63,7 @@ export const AdminProductsScreen: React.FC = () => {
     setCategory(categories[0]?.id || 'mode');
     setImageUrl('');
     setSizesInput('');
+    setColorsInput('');
     setSuccessMsg('');
     setErrorMsg('');
     setIsModalOpen(true);
@@ -69,13 +71,14 @@ export const AdminProductsScreen: React.FC = () => {
 
   const handleOpenEdit = (product: Product) => {
     setEditingProduct(product);
-    setName(product.name);
+    setName(product.name || '');
     setDescription(product.description);
     setPrice(product.price.toString());
     setStock(product.stock.toString());
     setCategory(product.category);
     setImageUrl(product.imageUrl);
     setSizesInput(product.sizes ? product.sizes.join(', ') : '');
+    setColorsInput(product.colors ? product.colors.join(', ') : '');
     setSuccessMsg('');
     setErrorMsg('');
     setIsModalOpen(true);
@@ -93,6 +96,9 @@ export const AdminProductsScreen: React.FC = () => {
       const parsedSizes = sizesInput.split(',')
         .map(s => s.trim())
         .filter(s => s.length > 0);
+      const parsedColors = colorsInput.split(',')
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
       
       if (editingProduct) {
         console.log("Updating existing product:", editingProduct.id);
@@ -102,7 +108,8 @@ export const AdminProductsScreen: React.FC = () => {
           stock: parsedStock, 
           category,
           imageUrl,
-          sizes: parsedSizes
+          sizes: parsedSizes,
+          colors: parsedColors
         });
         setSuccessMsg('Produit mis à jour avec succès');
       } else {
@@ -130,7 +137,8 @@ export const AdminProductsScreen: React.FC = () => {
           rating: 0, 
           reviewsCount: 0, 
           salesCount: 0,
-          sizes: parsedSizes
+          sizes: parsedSizes,
+          colors: parsedColors
         };
         await addProduct(productData);
         setSuccessMsg('Produit ajouté avec succès');
@@ -164,7 +172,7 @@ export const AdminProductsScreen: React.FC = () => {
     }
   };
 
-  const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredProducts = products.filter(p => (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
     <div className="flex flex-col h-full space-y-6">
@@ -224,7 +232,7 @@ export const AdminProductsScreen: React.FC = () => {
                         <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900 line-clamp-1 max-w-[200px]">{product.name}</p>
+                        <p className="font-medium text-gray-900 line-clamp-1 max-w-[200px]">{product.name || 'Sans nom'}</p>
                         <p className="text-xs text-gray-500">ID: {product.id}</p>
                       </div>
                     </td>
@@ -311,6 +319,16 @@ export const AdminProductsScreen: React.FC = () => {
                 <p className="text-[10px] text-gray-400 mt-1 font-medium">Laissez vide pour utiliser les plages automatiques selon la catégorie.</p>
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Couleurs Personnalisées (séparées par une virgule)</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: Noir, Blanc, Bleu (facultatif)" 
+                  value={colorsInput} 
+                  onChange={e=>setColorsInput(e.target.value)} 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" 
+                />
+              </div>
+              <div>
                 <ImageUpload 
                   currentImageUrl={imageUrl} 
                   onImageUploaded={(url) => setImageUrl(url)} 
@@ -330,7 +348,7 @@ export const AdminProductsScreen: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 relative animate-in zoom-in-95 duration-150">
             <h3 className="text-lg font-black text-gray-950 mb-2">Confirmer la suppression</h3>
             <p className="text-gray-600 text-sm leading-relaxed mb-5">
-              Êtes-vous sûr de vouloir supprimer le produit <strong className="text-gray-950 font-bold">{productToDelete.name}</strong> ? Cette opération est définitive.
+              Êtes-vous sûr de vouloir supprimer le produit <strong className="text-gray-950 font-bold">{productToDelete.name || 'Sans nom'}</strong> ? Cette opération est définitive.
             </p>
             {deleteError && (
               <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-xl text-xs font-semibold border border-red-100">

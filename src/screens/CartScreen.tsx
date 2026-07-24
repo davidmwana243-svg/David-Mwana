@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 
 export const CartScreen: React.FC = () => {
-  const { items, updateQuantity, removeFromCart, totalPrice, totalItems } = useCart();
+  const { items, updateQuantity, removeFromCart, totalPrice, totalItems, clearCart } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
   
@@ -41,11 +41,18 @@ export const CartScreen: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      <div className="bg-white p-4 shadow-sm flex items-center sticky top-0 z-10">
-        <button onClick={handleBack} className="mr-3">
-          <ArrowLeft className="w-6 h-6 text-gray-800" />
+      <div className="bg-white p-4 shadow-sm flex items-center sticky top-0 z-10 justify-between">
+        <button onClick={handleBack} className="flex items-center text-gray-800">
+          <ArrowLeft className="w-6 h-6" />
         </button>
-        <h1 className="text-lg font-bold text-gray-900 flex-1 text-center pr-9">Panier ({totalItems})</h1>
+        <h1 className="text-lg font-bold text-gray-900 flex-1 text-center">Panier ({totalItems})</h1>
+        <button 
+          onClick={clearCart} 
+          className="text-xs font-semibold text-red-500 hover:text-red-700 active:scale-95 transition-all cursor-pointer"
+          id="clear-cart-button"
+        >
+          Vider
+        </button>
       </div>
 
       <div className="flex-1 p-4 space-y-4 overflow-y-auto">

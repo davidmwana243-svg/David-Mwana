@@ -1,40 +1,39 @@
 import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 export const SplashScreen: React.FC = () => {
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
+    console.log("SplashScreen: loading =", loading, "user =", user);
+    if (loading) return;
+
     const timer = setTimeout(() => {
-      const hasOnboarded = localStorage.getItem('hasOnboarded');
-      if (hasOnboarded) {
-        navigate('/home', { replace: true });
-      } else {
-        navigate('/onboarding', { replace: true });
-      }
+      console.log("SplashScreen: Navigating to /home");
+      navigate('/home', { replace: true });
     }, 1500);
     return () => clearTimeout(timer);
-  }, [navigate]);
+  }, [user, loading, navigate]);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#020714] flex flex-col items-center justify-center overflow-hidden max-w-md mx-auto">
-      {/* Subtle blue/navy glow behind the centered logo exactly like the photo */}
-      <div className="absolute w-[320px] h-[320px] bg-blue-600/15 rounded-full blur-[100px] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+    <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center overflow-hidden max-w-md mx-auto">
       
       <div className="relative z-10 flex flex-col items-center w-full px-6">
-        <div className="w-full max-w-[320px] sm:max-w-[380px] relative">
+        <div className="w-full max-w-[420px] sm:max-w-[480px] relative">
           <img 
-            src="https://i.postimg.cc/wTq8Z6jv/file-000000004b5071fd846b49064bbc6c90.png" 
+            src="https://i.postimg.cc/1tvrPKYb/file-00000000a4fc7243b5ae1ecdf23ff4f5.png" 
             alt="DavidSTORE Logo" 
             className="w-full object-contain relative z-10"
           />
         </div>
       </div>
 
-      {/* Circular loader near the bottom as in the photo */}
+      {/* Circular loader near the bottom */}
       <div className="absolute bottom-24 flex items-center justify-center">
-        <div className="w-9 h-9 border-[3px] border-blue-500/15 border-t-blue-400 rounded-full animate-spin" />
+        <div className="w-9 h-9 border-[3px] border-gray-100 border-t-blue-600 rounded-full animate-spin" />
       </div>
     </div>
   );

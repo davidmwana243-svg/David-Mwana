@@ -1,11 +1,10 @@
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 import { doc, setDoc } from 'firebase/firestore';
-import { db, app } from '../config/firebase';
+import { db, app } from '../firebase';
 
 // Web Push VAPID key is configurable via environment.
-// Fallback to a placeholder or empty string
-// @ts-ignore
-const VAPID_KEY = (import.meta as any).env?.VITE_FCM_VAPID_KEY || '';
+// Fallback to empty string
+const VAPID_KEY = import.meta.env.VITE_FCM_VAPID_KEY || '';
 
 /**
  * Checks if the browser supports push notifications.
@@ -65,12 +64,20 @@ export const registerOrUpdateToken = async (userId: string | null, isAdmin: bool
       scope: '/'
     });
     
+    // Ensure the service worker is active before getting the token
+    await navigator.serviceWorker.ready;
+    
+    if (!VAPID_KEY) {
+      console.log('FCM registration skipped: VITE_FCM_VAPID_KEY is not set.');
+      return null;
+    }
+    
     const messaging = getMessaging(app);
     
     // Fetch unique registration token from FCM
     const token = await getToken(messaging, {
       serviceWorkerRegistration: registration,
-      vapidKey: VAPID_KEY ? VAPID_KEY : undefined,
+      vapidKey: VAPID_KEY,
     });
 
     if (token) {

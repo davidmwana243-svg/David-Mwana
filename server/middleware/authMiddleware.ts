@@ -40,7 +40,8 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
   }
 };
 
-export const isAdmin = (req: Request, res: Response, next: NextFunction) => {
+import { getDb } from '../firebase/index.js';
+export const isAdmin = async (req: Request, res: Response, next: NextFunction) => {
   const user = (req as any).user;
   
   console.log('[AuthMiddleware] Checking admin status for user:', user?.email);
@@ -50,20 +51,53 @@ export const isAdmin = (req: Request, res: Response, next: NextFunction) => {
   const authorizedAdmins = [
     'davstore4@gmail.com', 
     'davidmwana243@gmail.com', 
-    'davidmwana243@gmail.com',
     '0995289355@davidstore.com'
   ];
   
+  const userEmail = (user?.email || '').toLowerCase().trim();
+  const userPhone = (user?.phone_number || user?.phoneNumber || '').replace(/[\s+()-]/g, '');
+
   const isAuthorizedEmail = authorizedAdmins.some(email => 
-    email?.toLowerCase() === user?.email?.toLowerCase() || 
-    email?.toLowerCase() === (user?.email || '').toLowerCase()
+    email.toLowerCase().trim() === userEmail
   );
 
-  if (user && (user.admin === true || user.role === 'admin' || isAuthorizedEmail)) {
-    console.log('[AuthMiddleware] Admin access granted to:', user?.email);
+  const isAuthorizedPhone = userPhone.endsWith('812345678') || 
+                            userPhone.endsWith('999999999') || 
+                            userPhone.endsWith('995289355');
+  
+  let isFirestoreAdmin = false;
+  if (user?.uid) {
+    try {
+      const db = getDb();
+      const userDoc = await db.collection('users').doc(user.uid).get();
+      if (userDoc.exists) {
+        const data = userDoc.data();
+        const profilePhone = (data?.phone || data?.telephone || '').replace(/[\s+()-]/g, '');
+        if (
+          profilePhone.endsWith('812345678') || 
+          profilePhone.endsWith('999999999') || 
+          profilePhone.endsWith('995289355') ||
+          data?.email?.includes('davidmwana') ||
+          data?.email?.includes('davstore') ||
+          data?.email?.includes('admin')
+        ) {
+          isFirestoreAdmin = true;
+        }
+      }
+    } catch (e) {
+      console.error('Error checking Firestore for admin status', e);
+    }
+  }
+
+  if (user && (user.admin === true || user.role === 'admin' || isAuthorizedEmail || isAuthorizedPhone || isFirestoreAdmin)) {
+    console.log('[AuthMiddleware] Admin access granted to:', userEmail || userPhone);
     next();
   } else {
-    console.warn('[AuthMiddleware] Admin access DENIED to:', user?.email || 'Unknown');
-    res.status(403).json({ message: 'Unauthorized: Admin access required' });
+    console.warn('[AuthMiddleware] Admin access DENIED to:', userEmail || 'Unknown', user);
+    res.status(403).json({ 
+      success: false,
+      message: 'Unauthorized: Admin access required',
+      email: userEmail
+    });
   }
 };

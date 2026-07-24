@@ -132,8 +132,112 @@ export function startNotificationListeners() {
 
     console.log('[FCM-Server] Background Firestore observers for FCM push triggers are currently disabled to prevent SDK conflicts.');
     
-    // Listeners removed until a compatible implementation is decided.
+    // Start our robust order status change real-time listener
+    startOrderStatusListener();
   } catch (err) {
     console.error('[FCM-Server] Failed to setup push notification Firestore observers:', err);
+  }
+}
+
+/**
+ * Real-time listener for order status changes to trigger Telegram notifications automatically
+ */
+export function startOrderStatusListener() {
+  try {
+    const db = getDb();
+    console.log('[FirestoreListener] Starting real-time listener for order status changes...');
+
+    db.collection('orders').onSnapshot((snapshot) => {
+      snapshot.docChanges().forEach(async (change) => {
+        if (change.type === 'added' || change.type === 'modified') {
+          const orderId = change.doc.id;
+          const orderData = change.doc.data();
+
+          const status = orderData.status;
+          const lastNotifiedStatus = orderData.lastNotifiedStatus;
+          const updatedAt = orderData.updatedAt || orderData.createdAt || 0;
+
+          if (!status) return;
+
+          // 1. Ignore historical changes from before server startup to prevent spamming users on boot
+          if (updatedAt < serverStartTime) {
+            if (!lastNotifiedStatus) {
+              try {
+                await db.collection('orders').doc(orderId).update({ lastNotifiedStatus: status });
+              } catch (err) {}
+            }
+            return;
+          }
+
+          // 2. Only trigger if status has changed
+          if (status !== lastNotifiedStatus) {
+            console.log(`[FirestoreListener] Order ${orderId} changed status to: ${status}`);
+
+            // Skip payment_pending notification to avoid double alerts on creation
+            if (status === 'payment_pending') {
+              try {
+                await db.collection('orders').doc(orderId).update({ lastNotifiedStatus: 'payment_pending' });
+              } catch (err) {}
+              return;
+            }
+
+            // Resolve Telegram ID
+            let telegramId = '';
+            const userId = orderData.userId || '';
+
+            try {
+              const userDoc = await db.collection('users').doc(userId).get();
+              if (userDoc.exists) {
+                telegramId = userDoc.data()?.telegramId || '';
+              }
+            } catch (err) {
+              console.error(`[FirestoreListener] Error retrieving user profile for ${userId}:`, err);
+            }
+
+            if (!telegramId && userId.startsWith('tg_')) {
+              telegramId = userId.replace('tg_', '');
+            }
+
+            // Generate security PIN and QR Token if missing and status is 'shipped'
+            const updatePayload: any = {
+              lastNotifiedStatus: status
+            };
+
+            if (status === 'shipped') {
+              if (!orderData.qrToken) {
+                updatePayload.qrToken = 'SECURE-TOK-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+              }
+              if (!orderData.deliveryPin) {
+                updatePayload.deliveryPin = Math.floor(100000 + Math.random() * 900000).toString();
+              }
+            }
+
+            // Update database first to prevent trigger race conditions
+            try {
+              await db.collection('orders').doc(orderId).update(updatePayload);
+            } catch (err) {
+              console.error(`[FirestoreListener] Error updating order payload for ${orderId}:`, err);
+            }
+
+            // Notify via Telegram bot
+            if (telegramId) {
+              try {
+                const { sendOrderStatusUpdate } = await import('../../telegram/bot');
+                await sendOrderStatusUpdate(telegramId, orderId, status, orderData.trackingNumber);
+                console.log(`[FirestoreListener] Notification dispatched to ${telegramId} for order ${orderId}`);
+              } catch (tgErr) {
+                console.error(`[FirestoreListener] Failed to dispatch Telegram notification:`, tgErr);
+              }
+            } else {
+              console.log(`[FirestoreListener] No Telegram ID resolved for order ${orderId}; skipped notification.`);
+            }
+          }
+        }
+      });
+    }, (error) => {
+      console.error('[FirestoreListener] Error in order status real-time listener:', error);
+    });
+  } catch (err) {
+    console.error('[FirestoreListener] Failed to initialize order status real-time listener:', err);
   }
 }

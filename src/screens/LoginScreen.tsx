@@ -9,17 +9,35 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 
-export const LoginScreen: React.FC = () => {
+interface LoginScreenProps {
+  initialMode?: 'login' | 'register' | 'forgot';
+}
+
+export const LoginScreen: React.FC<LoginScreenProps> = ({ initialMode: propInitialMode }) => {
   const { user, signInWithPhone, signUpWithPhone, sendPasswordReset } = useAuth();
   const { showNotification } = useNotification();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Initial mode from navigation state if available
-  const initialMode = (location.state as any)?.mode === 'register' ? 'register' : 'login';
+  // Initial mode from prop, navigation state, or path
+  const initialMode = propInitialMode || (location.state as any)?.mode || (location.pathname.includes('/register') ? 'register' : 'login');
   
   // Mode: 'login' | 'register' | 'forgot'
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>(initialMode);
+  
+  // Sync mode with location changes or prop changes
+  useEffect(() => {
+    if (propInitialMode) {
+      setMode(propInitialMode);
+      return;
+    }
+
+    if (location.pathname.includes('/register')) {
+      setMode('register');
+    } else if (location.pathname.includes('/login')) {
+      setMode('login');
+    }
+  }, [location.pathname, propInitialMode]);
   
   // Form values
   const [phone, setPhone] = useState('');
@@ -40,10 +58,10 @@ export const LoginScreen: React.FC = () => {
   const [resetSuccessMsg, setResetSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) {
-      navigate('/', { replace: true });
+    if (user && !location.pathname.includes('/register') && !location.pathname.includes('/login')) {
+      navigate('/profile', { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, navigate, location.pathname]);
 
   const handleBack = () => {
     navigate('/home');

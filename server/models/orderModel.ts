@@ -5,6 +5,7 @@ export interface OrderItem {
   price: number;
   quantity: number;
   imageUrl: string;
+  size?: string;
 }
 
 export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
@@ -26,4 +27,9 @@ export interface Order {
   paymentStatus?: 'pending' | 'paid' | 'failed';
   createdAt: number;
   updatedAt: number;
+  qrToken?: string;
+  deliveryPin?: string;
+  deliveryConfirmed?: boolean;
+  deliveredAt?: number;
+  deliveryConfirmationMethod?: string;
 }

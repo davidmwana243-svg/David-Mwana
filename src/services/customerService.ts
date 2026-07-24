@@ -1,6 +1,6 @@
 import { collection, getDocs, doc, writeBatch } from 'firebase/firestore';
-import { db } from '../config/firebase';
-import { UserProfile } from '../models/types';
+import { db } from '../firebase';
+import { UserProfile } from '../types';
 
 export const getCustomers = async (): Promise<UserProfile[]> => {
   try {
