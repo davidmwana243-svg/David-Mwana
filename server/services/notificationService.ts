@@ -204,11 +204,19 @@ export function startOrderStatusListener() {
             };
 
             if (status === 'shipped') {
-              if (!orderData.qrToken) {
-                updatePayload.qrToken = 'SECURE-TOK-' + Math.random().toString(36).substring(2, 10).toUpperCase();
-              }
-              if (!orderData.deliveryPin) {
-                updatePayload.deliveryPin = Math.floor(100000 + Math.random() * 900000).toString();
+              const existingToken = orderData.secureToken || orderData.qrToken;
+              if (!existingToken) {
+                const secureToken = 'SECURE-TOK-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+                const createdAt = orderData.createdAt || Date.now();
+                const expiresAt = orderData.expiresAt || (createdAt + 30 * 24 * 60 * 60 * 1000);
+                updatePayload.secureToken = secureToken;
+                updatePayload.qrToken = secureToken;
+                updatePayload.deliveryPin = secureToken;
+                updatePayload.expiresAt = expiresAt;
+              } else {
+                updatePayload.secureToken = existingToken;
+                updatePayload.qrToken = existingToken;
+                if (!orderData.deliveryPin) updatePayload.deliveryPin = existingToken;
               }
             }
 

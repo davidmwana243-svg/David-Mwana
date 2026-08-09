@@ -249,3 +249,43 @@ export async function handleAdminReplyToSupport(bot: TelegramBot, replyMsg: any)
     await bot.sendMessage(replyMsg.chat.id, `❌ Échec de la transmission du message au client (l'utilisateur a peut-être bloqué le bot).`);
   }
 }
+
+/**
+ * Notifie l'administrateur lorsqu'une nouvelle évaluation client est soumise
+ */
+export async function notifyAdminsOfNewReview(bot: TelegramBot, reviewData: any) {
+  const adminIdsStr = process.env.TELEGRAM_ADMIN_IDS || '';
+  const adminIds = adminIdsStr ? adminIdsStr.split(',').map(id => id.trim()) : ['437132868753'];
+
+  try {
+    const db = getDb();
+    const adminUsersSnap = await db.collection(USERS_COL).where('role', '==', 'admin').get();
+    adminUsersSnap.forEach(doc => {
+      const tgId = doc.data().telegramId;
+      if (tgId && !adminIds.includes(String(tgId))) {
+        adminIds.push(String(tgId));
+      }
+    });
+  } catch (e) {
+    // fallback to default admin list
+  }
+
+  const orderId = reviewData.orderId || 'INCONNU';
+  const shortId = orderId.length > 12 ? `#DS-${orderId.slice(-8).toUpperCase()}` : `#DS-${orderId}`;
+  const ratingStars = '⭐'.repeat(Math.min(5, Math.max(1, reviewData.rating || 5)));
+  const commentText = reviewData.comment && reviewData.comment.trim() ? reviewData.comment : 'Aucun commentaire';
+
+  const adminMsg = `⭐ *Nouvelle évaluation reçue*\n\n` +
+    `Commande :\n*${shortId}*\n\n` +
+    `Note :\n${ratingStars}\n\n` +
+    `Commentaire :\n*${commentText}*`;
+
+  for (const adminId of adminIds) {
+    try {
+      await bot.sendMessage(adminId, adminMsg, { parse_mode: 'Markdown' });
+      console.log(`[REVIEW NOTIF] Admin ${adminId} notifié pour l'évaluation de ${shortId}`);
+    } catch (err: any) {
+      console.warn(`[REVIEW NOTIF] Impossible d'envoyer à l'admin ${adminId}:`, err?.message || err);
+    }
+  }
+}

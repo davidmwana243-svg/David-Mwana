@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { Order } from '../types';
 import { getUserOrders, confirmQRReceived, updateOrderStatus } from '../services/orderService';
+import { generateDeliveryQRPayload } from '../utils/deliveryCrypto';
 import { 
   ArrowLeft, 
   Package, 
@@ -30,6 +31,7 @@ import { db } from '../firebase';
 import { formatSafeDate } from '../utils/dateUtils';
 import { QRCodeSVG } from 'qrcode.react';
 import { addProductReview } from '../services/productService';
+import { OrderTrackerModal } from '../components/OrderTrackerModal';
 
 export const OrdersScreen: React.FC = () => {
   const { user, profile } = useAuth();
@@ -37,6 +39,7 @@ export const OrdersScreen: React.FC = () => {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [trackingOrder, setTrackingOrder] = useState<Order | null>(null);
   
   // Custom states for QR delivery validation
   const [scanningOrder, setScanningOrder] = useState<Order | null>(null);
@@ -104,16 +107,17 @@ export const OrdersScreen: React.FC = () => {
   const triggerRealScanSuccess = async (ord: Order, tokenVal: string) => {
     setIsValidating(true);
     try {
-      const success = await confirmQRReceived(ord.id, tokenVal);
-      if (success) {
+      const res = await confirmQRReceived(ord.id, tokenVal, { clientUserId: user?.uid, confirmedBy: 'client' });
+      if (res.success) {
         setSuccessOrder(ord);
         setShowSuccess(true);
         setScanningOrder(null);
       } else {
-        showNotification("Signature", "Erreur de validation de la signature: le jeton QR ne correspond pas.", "error");
+        showNotification("Validation Livraison", res.message, "error");
       }
     } catch (err) {
       console.error(err);
+      showNotification("Erreur", "Une erreur est survenue lors de la validation.", "error");
     } finally {
       setIsValidating(false);
     }
@@ -195,25 +199,9 @@ export const OrdersScreen: React.FC = () => {
         });
 
         if (code && code.data) {
-          try {
-            let decodedToken = code.data;
-            if (code.data.startsWith('{')) {
-              const json = JSON.parse(code.data);
-              decodedToken = json.token || json.qrToken || code.data;
-            }
-            
-            if (decodedToken === scanningOrder.qrToken) {
-              playScanBeep();
-              triggerRealScanSuccess(scanningOrder, decodedToken);
-              return;
-            }
-          } catch (e) {
-            if (code.data === scanningOrder.qrToken) {
-              playScanBeep();
-              triggerRealScanSuccess(scanningOrder, code.data);
-              return;
-            }
-          }
+          playScanBeep();
+          triggerRealScanSuccess(scanningOrder, code.data);
+          return;
         }
       }
       animationFrameId = requestAnimationFrame(tick);
@@ -331,9 +319,10 @@ export const OrdersScreen: React.FC = () => {
     if (!scanningOrder) return;
     setIsValidating(true);
 
+    const { jsonString } = generateDeliveryQRPayload(scanningOrder, scanningOrder.driverId || '', scanningOrder.userId || user?.uid || '');
     setTimeout(async () => {
       playScanBeep();
-      await triggerRealScanSuccess(scanningOrder, scanningOrder.qrToken || '');
+      await triggerRealScanSuccess(scanningOrder, jsonString);
     }, 1200);
   };
 
@@ -425,6 +414,15 @@ export const OrdersScreen: React.FC = () => {
                     <span className="text-gray-400 font-bold uppercase tracking-wider text-[9px]">Total Payé</span>
                     <span className="text-sm font-black text-blue-600">{(order.total || 0).toLocaleString()} FC</span>
                   </div>
+
+                  {/* Primary Order Tracking CTA */}
+                  <button
+                    onClick={() => setTrackingOrder(order)}
+                    className="w-full mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-2.5 px-4 rounded-xl text-[10px] font-black tracking-wide flex items-center justify-center gap-2 shadow-md shadow-blue-100 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <Truck className="w-3.5 h-3.5 text-blue-200" />
+                    <span>📍 SUIVRE MA COMMANDE EN DIRECT</span>
+                  </button>
 
                   {/* DavidSTORE STYLE QR ACTIONS: Show only if "shipped" status */}
                   {order.status === 'shipped' && (
@@ -665,53 +663,58 @@ export const OrdersScreen: React.FC = () => {
 
       {/* RENDER MODAL VIEW 3: SHOW QR TO DELIVERER */}
       <AnimatePresence>
-        {showingQRForOrder && (
+        {showingQRForOrder && (() => {
+          const { payloadObj, jsonString } = generateDeliveryQRPayload(showingQRForOrder, showingQRForOrder.driverId || '', showingQRForOrder.userId || user?.uid || '');
+          return (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
              <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white rounded-[32px] overflow-hidden p-8 shadow-2xl w-full max-w-sm text-center space-y-6"
+              className="bg-white rounded-[32px] overflow-hidden p-6 shadow-2xl w-full max-w-sm text-center space-y-5"
             >
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Pass de Livraison DavidSTORE</span>
-                <button onClick={() => setShowingQRForOrder(null)} className="p-1 rounded-full hover:bg-gray-100 transition-colors">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Pass de Livraison HD DavidSTORE</span>
+                <button onClick={() => setShowingQRForOrder(null)} className="p-1 rounded-full hover:bg-gray-100 transition-colors cursor-pointer">
                   <X className="w-5 h-5 text-gray-400" />
                 </button>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <h3 className="font-black text-xl text-gray-900 leading-tight">Présentez ce Code</h3>
-                <p className="text-xs text-gray-500 font-medium px-4">Le livreur doit scanner ce code pour officialiser la réception de votre colis.</p>
+                <p className="text-xs text-gray-500 font-medium px-2">Le livreur doit scanner ce code ou entrer votre PIN pour officialiser la réception.</p>
               </div>
 
-              <div className="bg-gray-50 p-6 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex items-center justify-center relative">
+              <div className="bg-gray-50 p-5 rounded-[2.5rem] border-2 border-dashed border-gray-200 flex flex-col items-center justify-center relative gap-3">
                  <div className="bg-white p-3 rounded-3xl shadow-sm border border-gray-100">
                     <QRCodeSVG 
-                      value={showingQRForOrder.qrToken || showingQRForOrder.id} 
-                      size={200} 
-                      level="H"
+                      value={jsonString} 
+                      size={220} 
+                      level="M"
+                      marginSize={2}
                       className="w-full h-full"
                     />
                  </div>
-                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white border-4 border-white shadow-lg">
-                    <ShieldCheck className="w-5 h-5" />
+                 <div className="bg-white px-4 py-2 rounded-xl border border-gray-200/80 shadow-2xs flex flex-col items-center">
+                   <span className="text-[9px] text-gray-400 font-extrabold uppercase tracking-widest">Code PIN de Confirmation</span>
+                   <span className="text-sm font-extrabold text-gray-900 font-mono tracking-wider">{payloadObj.secureToken}</span>
                  </div>
               </div>
 
-              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-[10px] text-blue-700 font-bold leading-relaxed">
+              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3.5 text-[10px] text-blue-700 font-bold leading-relaxed">
                 NE PARTAGEZ PAS : Ce code est unique à votre commande #{showingQRForOrder.id.slice(-6).toUpperCase()} et garantit la sécurité de votre achat.
               </div>
 
               <button
                 onClick={() => setShowingQRForOrder(null)}
-                className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl shadow-gray-200"
+                className="w-full py-3.5 bg-gray-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl shadow-gray-200 cursor-pointer"
               >
                 Fermer
               </button>
             </motion.div>
           </div>
-        )}
+          );
+        })()}
       </AnimatePresence>
 
       {/* RENDER MODAL VIEW 4: NOTER & LAISSER UN AVIS DIRECTLY */}
@@ -849,6 +852,19 @@ export const OrdersScreen: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Real-time Order Tracking Modal */}
+      {trackingOrder && (
+        <OrderTrackerModal
+          order={trackingOrder}
+          onClose={() => setTrackingOrder(null)}
+          onOrderUpdated={() => {
+            // Refetch or update active order
+            const updated = orders.find(o => o.id === trackingOrder.id);
+            if (updated) setTrackingOrder(updated);
+          }}
+        />
+      )}
 
     </div>
   );

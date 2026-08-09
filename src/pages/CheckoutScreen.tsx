@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { createOrder } from '../services/orderService';
+import { checkCartStock } from '../services/productService';
 import { Button } from '../components/Button';
-import { ArrowLeft, Loader2, CheckCircle2, ShieldCheck, Smartphone, MapPin, X } from 'lucide-react';
+import { ArrowLeft, Loader2, CheckCircle2, ShieldCheck, Smartphone, MapPin, X, Minus, Plus, Trash2, PackageCheck, AlertTriangle, Edit3, CornerUpLeft } from 'lucide-react';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -24,7 +25,7 @@ export const sanitizeDRCPhoneNumber = (phoneStr: string): string => {
 };
 
 export const CheckoutScreen: React.FC = () => {
-  const { items, totalPrice, clearCart } = useCart();
+  const { items, totalPrice, totalItems, updateQuantity, clearCart } = useCart();
   const { user, profile } = useAuth();
   const { showNotification } = useNotification();
   const navigate = useNavigate();
@@ -176,6 +177,18 @@ export const CheckoutScreen: React.FC = () => {
     setErrorMessage('');
     
     try {
+      // 0. Stock validation before payment submission
+      const stockCheck = await checkCartStock(items);
+      if (!stockCheck.valid && stockCheck.outOfStockProduct) {
+        setIsSubmitting(false);
+        const prod = stockCheck.outOfStockProduct;
+        const msg = `Le produit "${prod.name}" n'est plus disponible dans cette quantité (Stock disponible : ${prod.available}).`;
+        setErrorMessage(`⚠️ Impossible de continuer\n\n${msg}`);
+        setPaymentStep('error');
+        showNotification("Rupture de stock", msg, "error");
+        return;
+      }
+
       const shippingFee = totalPrice < 50000 ? 3000 : 0;
       const finalTotal = totalPrice + shippingFee;
       const fullAddress = `${address}, ${city} ${zip}`;
@@ -269,31 +282,108 @@ export const CheckoutScreen: React.FC = () => {
       </div>
 
       <div className="flex-1 p-4 overflow-y-auto w-full max-w-md mx-auto">
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-4">
-          <h2 className="font-bold text-gray-800 mb-3 text-sm">Détails de la commande</h2>
-          {items.map(item => (
-            <div key={item.product.id} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0 text-xs">
-              <span className="text-gray-600 line-clamp-1 flex-1 pr-4">
-                {item.quantity}x {item.product.name}
-              </span>
-              <span className="font-medium">{Number(item.product.price * item.quantity).toLocaleString()} FC</span>
+        {/* Order Items & Quantities Specification */}
+        <div id="order-summary-section" className="bg-white p-4.5 rounded-2xl shadow-sm border border-gray-100 mb-4">
+          <div className="flex items-center justify-between mb-3.5 border-b border-gray-100 pb-3">
+            <div>
+              <h2 className="font-extrabold text-[#0B3D91] text-base flex items-center gap-2">
+                <span>🛒 RÉCAPITULATIF DE VOTRE COMMANDE</span>
+              </h2>
+              <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                Vérifiez les articles, variantes et quantités avant de valider
+              </p>
             </div>
-          ))}
-          <div className="space-y-2 mb-3">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-500">Sous-total</span>
-              <span className="font-medium">{Number(totalPrice).toLocaleString()} FC</span>
-            </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-500">Livraison</span>
-              <span className={`font-bold ${totalPrice < 50000 ? 'text-gray-900' : 'text-green-600'}`}>
-                {totalPrice < 50000 ? '3000 FC' : 'Gratuite'}
-              </span>
-            </div>
+            <span className="text-xs font-black text-[#0B3D91] bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">
+              {totalItems} article{totalItems > 1 ? 's' : ''}
+            </span>
           </div>
-          <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
-            <span className="font-bold text-sm">Total</span>
-            <span className="font-bold text-orange-500 text-lg">{Number(totalPrice + (totalPrice < 50000 ? 3000 : 0)).toLocaleString()} FC</span>
+
+          <div className="space-y-3 mb-4">
+            {items.map((item, index) => (
+              <div 
+                key={item.product.id + (item.selectedSize || '') + (item.selectedColor || '')} 
+                className="bg-gray-50/90 p-3 rounded-xl border border-gray-200/70 flex flex-col gap-2 relative"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="w-12 h-12 rounded-lg bg-white overflow-hidden flex-shrink-0 border border-gray-200 p-0.5">
+                    <img src={item.product.imageUrl} alt={item.product.name} className="w-full h-full object-contain" />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-black text-gray-900 truncate">📦 Produit {index + 1} : {item.product.name}</p>
+                    
+                    {/* Display variants if present */}
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap text-[10px] text-gray-600 font-medium">
+                      {item.selectedColor && (
+                        <span className="bg-gray-200/80 text-gray-800 font-semibold px-1.5 py-0.5 rounded">
+                          Couleur : {item.selectedColor}
+                        </span>
+                      )}
+                      {item.selectedSize && (
+                        <span className="bg-[#FFC107]/20 text-[#0B3D91] font-bold px-1.5 py-0.5 rounded">
+                          Taille : {item.selectedSize}
+                        </span>
+                      )}
+                      {item.product.category && (
+                        <span className="bg-blue-50 text-blue-700 font-semibold px-1.5 py-0.5 rounded">
+                          {item.product.category}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Quantity controls */}
+                  <div className="flex items-center bg-white rounded-lg border border-gray-200 shadow-sm p-1">
+                    <button
+                      type="button"
+                      onClick={() => updateQuantity(item.product.id, item.quantity - 1, item.selectedSize, item.selectedColor)}
+                      className="w-6 h-6 flex items-center justify-center rounded-md bg-gray-50 text-gray-700 hover:bg-gray-200 active:scale-90 font-bold transition-all cursor-pointer"
+                      title="Diminuer la quantité"
+                    >
+                      {item.quantity === 1 ? <Trash2 className="w-3 h-3 text-red-500" /> : <Minus className="w-3 h-3" />}
+                    </button>
+                    <span className="w-8 text-center font-black text-gray-900 text-xs">
+                      {item.quantity} pc{item.quantity > 1 ? 's' : ''}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.selectedSize, item.selectedColor)}
+                      className="w-6 h-6 flex items-center justify-center rounded-md bg-gray-50 text-gray-700 hover:bg-gray-200 active:scale-90 font-bold transition-all cursor-pointer"
+                      title="Augmenter la quantité"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-2 border-t border-gray-200/60 text-gray-600 font-medium">
+                  <span>Prix unitaire : <strong className="text-gray-900">{Number(item.product.price).toLocaleString()} FC</strong></span>
+                  <span>Sous-total : <strong className="text-[#0B3D91] font-extrabold">{Number(item.product.price * item.quantity).toLocaleString()} FC</strong></span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[#0B3D91]/5 p-3.5 rounded-xl border border-[#0B3D91]/10 space-y-2">
+            <h3 className="font-extrabold text-[#0B3D91] text-xs uppercase tracking-wider mb-1">
+              💰 RÉSUMÉ DU PAIEMENT
+            </h3>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-gray-600 font-medium">Produits ({totalItems}) :</span>
+              <span className="font-bold text-gray-900">{Number(totalPrice).toLocaleString()} FC</span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-gray-600 font-medium">Livraison :</span>
+              <span className={`font-bold ${totalPrice < 50000 ? 'text-gray-900' : 'text-emerald-600 font-black'}`}>
+                {totalPrice < 50000 ? '3 000 FC' : 'Gratuite (LIVRAISON EXPRESS)'}
+              </span>
+            </div>
+            <div className="flex justify-between items-center pt-2.5 mt-2 border-t border-[#0B3D91]/20">
+              <span className="font-black text-sm text-[#0B3D91]">TOTAL À PAYER :</span>
+              <span className="font-black text-[#0B3D91] text-xl bg-[#FFC107] px-3 py-0.5 rounded-lg border border-amber-400 shadow-sm">
+                {Number(totalPrice + (totalPrice < 50000 ? 3000 : 0)).toLocaleString()} FC
+              </span>
+            </div>
           </div>
         </div>
 
@@ -468,26 +558,66 @@ export const CheckoutScreen: React.FC = () => {
             )}
           </div>
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} className="mt-6 space-y-3">
             <Button 
               disabled={isSubmitting || !address || !phone} 
               type="submit" 
-              className="w-full py-4 text-lg font-bold rounded-xl shadow-lg shadow-orange-500/40 relative overflow-hidden group"
+              className="w-full py-4 text-base font-extrabold rounded-2xl shadow-xl bg-[#0B3D91] hover:bg-[#082d6c] text-white relative overflow-hidden group border border-[#FFC107]/30 transition-all cursor-pointer"
             >
               <div className="flex items-center justify-center space-x-2">
                 {isSubmitting ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="w-5 h-5 animate-spin text-[#FFC107]" />
                 ) : (
                   <>
-                    <ShieldCheck className="w-5 h-5" />
-                    <span>Paiement sécurisé</span>
+                    <CheckCircle2 className="w-5 h-5 text-[#FFC107]" />
+                    <span>✅ Confirmer la commande & Payer</span>
                   </>
                 )}
               </div>
             </Button>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const el = document.getElementById('order-summary-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="py-2.5 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                <span>✏️ Modifier quantités</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEditAddressLines(address);
+                  setEditCity(city);
+                  setEditPhone(phone);
+                  setIsEditingContact(true);
+                  const el = document.getElementById('edit-delivery-toggle');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="py-2.5 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all"
+              >
+                <MapPin className="w-3.5 h-3.5 text-orange-500" />
+                <span>📍 Modifier l'adresse</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleBack}
+              className="w-full py-2 text-xs font-bold text-gray-500 hover:text-red-600 flex items-center justify-center gap-1 transition-colors mt-2"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>❌ Annuler et retourner au panier</span>
+            </button>
+
             {(!address || !phone) && (
-              <p className="text-[10px] text-center text-gray-400 mt-3 italic">
-                Veuillez compléter votre profil pour commander
+              <p className="text-[10px] text-center text-red-500 font-bold mt-2">
+                ⚠️ Veuillez compléter votre adresse et numéro de téléphone pour pouvoir confirmer.
               </p>
             )}
           </form>

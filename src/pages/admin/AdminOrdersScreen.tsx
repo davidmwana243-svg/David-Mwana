@@ -31,6 +31,7 @@ import {
 import { Button } from '../../components/Button';
 import { Order } from '../../types';
 import { getOrders, updateOrderStatus, confirmQRReceived, updateOrderItemSize } from '../../services/orderService';
+import { generateDeliveryQRPayload } from '../../utils/deliveryCrypto';
 import { useNotification } from '../../context/NotificationContext';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -129,8 +130,8 @@ export const AdminOrdersScreen: React.FC = () => {
   const triggerAdminRealScanSuccess = async (ord: Order, tokenVal: string) => {
     setIsValidatingScan(true);
     try {
-      const success = await confirmQRReceived(ord.id, tokenVal);
-      if (success) {
+      const res = await confirmQRReceived(ord.id, tokenVal, { confirmedBy: 'admin_driver' });
+      if (res.success) {
         setScanSuccess(true);
         setIsValidatingScan(false);
         setTimeout(() => {
@@ -142,12 +143,13 @@ export const AdminOrdersScreen: React.FC = () => {
             `La livraison pour ${ord.userName || 'le client'} a été confirmée avec succès. Inventaire mis à jour.`, 
             'success'
           );
-        }, 2200);
+        }, 1800);
       } else {
-        showNotification("Signature", "Erreur de signature: Le code QR scanné ne correspond pas à cette commande.", "error");
+        showNotification("Validation Livraison", res.message, "error");
       }
     } catch (err) {
       console.error(err);
+      showNotification("Erreur", "Une erreur est survenue lors de la validation.", "error");
     } finally {
       setIsValidatingScan(false);
     }
@@ -198,24 +200,9 @@ export const AdminOrdersScreen: React.FC = () => {
         });
 
         if (code && code.data) {
-          try {
-            let decodedToken = code.data;
-            if (code.data.startsWith('{')) {
-              const json = JSON.parse(code.data);
-              decodedToken = json.token || json.qrToken || code.data;
-            }
-            if (decodedToken === selectedOrder.qrToken) {
-              playScanBeep();
-              triggerAdminRealScanSuccess(selectedOrder, decodedToken);
-              return;
-            }
-          } catch (e) {
-            if (code.data === selectedOrder.qrToken) {
-              playScanBeep();
-              triggerAdminRealScanSuccess(selectedOrder, code.data);
-              return;
-            }
-          }
+          playScanBeep();
+          triggerAdminRealScanSuccess(selectedOrder, code.data);
+          return;
         }
       }
       animationFrameId = requestAnimationFrame(tick);
@@ -392,12 +379,8 @@ export const AdminOrdersScreen: React.FC = () => {
 
   const handleSimulatedAdminScan = async () => {
     if (!selectedOrder) return;
-    setIsScanning(true);
-    setScanSuccess(false);
-    setIsValidatingScan(false);
-    setTimeout(async () => {
-      // Execute local verification flow for deliverers screen
-    }, 1500);
+    const { jsonString } = generateDeliveryQRPayload(selectedOrder, 'admin_driver', selectedOrder.userId || '');
+    triggerAdminRealScanSuccess(selectedOrder, jsonString);
   };
 
   const handleManualPinConfirm = () => {
@@ -406,16 +389,17 @@ export const AdminOrdersScreen: React.FC = () => {
     setManualPin('');
   };
 
-  const renderMockupQRCode = (payload: string) => {
+  const renderMockupQRCode = (ord: Order) => {
+    const { payloadObj, jsonString } = generateDeliveryQRPayload(ord, 'admin_driver', ord.userId || '');
     return (
       <div className="flex flex-col items-center p-5 bg-white border border-gray-100 rounded-3xl shadow-sm max-w-xs mx-auto">
         <div className="relative">
-          <div className="bg-white p-2 rounded-xl shadow-xs border border-gray-100">
+          <div className="bg-white p-2.5 rounded-2xl shadow-xs border border-gray-100">
             <QRCodeSVG 
-              value={payload} 
-              size={180} 
+              value={jsonString} 
+              size={220} 
               level="H" 
-              includeMargin={false}
+              marginSize={2}
               className="w-full h-full"
             />
           </div>
@@ -424,15 +408,19 @@ export const AdminOrdersScreen: React.FC = () => {
           </div>
         </div>
         
-        <div className="mt-4 text-center space-y-1.5 w-full">
-          <div 
-            onClick={() => copyTokenToClipboard(payload)}
-            className="text-[10px] text-gray-500 font-mono tracking-wider truncate max-w-[220px] block px-3 py-1.5 bg-gray-50 rounded-lg mx-auto border border-gray-100/50 cursor-pointer hover:bg-gray-100 active:scale-95 transition-all"
-          >
-            {copiedToken ? "COPIÉ !" : `${payload.slice(0, 36)}...`}
+        <div className="mt-4 text-center space-y-2 w-full">
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest">Code PIN Sécurisé</span>
+            <div 
+              onClick={() => copyTokenToClipboard(payloadObj.secureToken)}
+              className="text-xs font-bold text-gray-800 font-mono tracking-wider px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-200/60 cursor-pointer hover:bg-gray-100 active:scale-95 transition-all flex items-center gap-1.5"
+            >
+              <span>{payloadObj.secureToken}</span>
+              <span className="text-[9px] text-blue-600 font-sans font-normal">{copiedToken ? "COPIÉ !" : "COPIER"}</span>
+            </div>
           </div>
-          <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest px-4">
-            Demandez au client de scanner ce code pour confirmer la réception
+          <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest px-2">
+            Demandez au client de scanner ce code ou de communiquer son PIN pour valider la livraison
           </p>
         </div>
       </div>
@@ -626,7 +614,7 @@ export const AdminOrdersScreen: React.FC = () => {
              <div className="space-y-4 text-center">
                <QrCode className="w-10 h-10 text-blue-600 mx-auto" />
                <h4 className="font-extrabold text-sm text-gray-800 uppercase">Code de Livraison QR</h4>
-               {renderMockupQRCode(selectedOrder.qrToken || selectedOrder.id)}
+               {renderMockupQRCode(selectedOrder)}
                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Une seule utilisation • Sécurité AES-256</p>
              </div>
 

@@ -1,6 +1,12 @@
 import { collection, getDocs, doc, setDoc, query, orderBy, where, updateDoc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Order, CartItem, UserAddress } from '../types';
+import { 
+  generateSecureToken, 
+  generateDeliveryQRPayload, 
+  validateDeliveryScanOrPin, 
+  DeliveryValidationResult 
+} from '../utils/deliveryCrypto';
 
 // Coordinates parsing utility simulating customer addresses in Haut-Katanga to demonstrate Google Maps tracking
 export interface DRCAddressDetails {
@@ -150,20 +156,40 @@ const cleanUndefined = (obj: any): any => {
 export const createOrder = async (userId: string, items: CartItem[], total: number, shippingAddress: string, userName?: string, userPhone?: string, addressObj?: UserAddress): Promise<Order> => {
   const newOrderRef = doc(collection(db, 'orders'));
   const parsedAddr = parseDRCOnlineAddress(shippingAddress);
-  const token = 'SECURE-TOK-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+  const secureToken = generateSecureToken();
+  const createdAt = Date.now();
+  const expiresAt = createdAt + 30 * 24 * 60 * 60 * 1000;
 
   const finalName = userName || 'Client DavidSTORE';
   const finalPhone = userPhone || '+243 000 000 000';
 
+  const partialOrderForSign = {
+    id: newOrderRef.id,
+    secureToken,
+    qrToken: secureToken,
+    createdAt,
+    expiresAt,
+    userId
+  };
+
+  const { payloadObj } = generateDeliveryQRPayload(partialOrderForSign as any, '', userId);
+
   const order: Order = {
     id: newOrderRef.id,
+    orderId: newOrderRef.id,
     userId,
+    clientId: userId,
     items,
     total,
     status: 'payment_pending',
     shippingAddress,
-    createdAt: Date.now(),
-    qrToken: token,
+    createdAt,
+    expiresAt,
+    secureToken,
+    signature: payloadObj.signature,
+    qrToken: secureToken,
+    deliveryPin: secureToken,
+    deliveryConfirmed: false,
     shippingAddressObj: {
       id: newOrderRef.id + '_addr',
       label: addressObj?.label || 'Adresse de livraison',
@@ -255,27 +281,81 @@ export const updateOrderItemSize = async (orderId: string, itemIdx: number, newS
   }
 };
 
-export const confirmQRReceived = async (orderId: string, token: string): Promise<boolean> => {
+export interface ConfirmQRResult {
+  success: boolean;
+  message: string;
+  code?: string;
+}
+
+export const confirmQRReceived = async (
+  orderId: string, 
+  tokenOrJSON: string,
+  options: { driverId?: string; clientUserId?: string; confirmedBy?: string } = {}
+): Promise<ConfirmQRResult> => {
   try {
     const orderRef = doc(db, 'orders', orderId);
     
-    // Verify token matches before updating
     const snap = await getDoc(orderRef);
-    if (!snap.exists()) return false;
-    const orderData = snap.data() as Order;
-    
-    if (orderData.qrToken !== token) {
-      console.warn("QR Token mismatch", { provided: token, expected: orderData.qrToken });
-      return false;
+    if (!snap.exists()) {
+      console.warn(`[DELIVERY] Erreur exacte: Commande introuvable pour ID ${orderId}`);
+      return { success: false, message: 'Commande introuvable.', code: 'ORDER_NOT_FOUND' };
     }
+    const orderData = snap.data() as Order;
+    orderData.id = orderData.id || orderId;
+
+    // Auto-backfill missing secure tokens if order was created without tokens
+    if (!orderData.secureToken && !orderData.deliveryPin) {
+      if (typeof tokenOrJSON === 'string' && tokenOrJSON.trim().startsWith('{')) {
+        try {
+          const parsed = JSON.parse(tokenOrJSON.trim());
+          if (parsed.secureToken) {
+            orderData.secureToken = parsed.secureToken;
+            orderData.qrToken = parsed.secureToken;
+            orderData.deliveryPin = parsed.secureToken;
+          }
+        } catch (e) {}
+      } else if (typeof tokenOrJSON === 'string' && tokenOrJSON.trim().length >= 4) {
+        const clean = tokenOrJSON.trim().toUpperCase();
+        const pin = clean.startsWith('SECURE-TOK-') ? clean : `SECURE-TOK-${clean}`;
+        orderData.secureToken = pin;
+        orderData.qrToken = pin;
+        orderData.deliveryPin = pin;
+      }
+    }
+
+    const valResult = validateDeliveryScanOrPin(tokenOrJSON, orderData, options);
+    if (!valResult.success) {
+      return {
+        success: false,
+        message: valResult.message,
+        code: valResult.code
+      };
+    }
+
+    const now = Date.now();
+    const confirmedBy = options.confirmedBy || options.driverId || orderData.userId || 'deliverer';
 
     await updateDoc(orderRef, {
       status: 'delivered',
-      deliveredAt: Date.now()
+      deliveredAt: now,
+      deliveryConfirmed: true,
+      deliveryConfirmedAt: now,
+      deliveryConfirmedBy: confirmedBy
     });
-    return true;
+
+    console.log(`[DELIVERY] Commande #${orderId} marquée comme livrée et confirmée dans Firestore.`);
+
+    return {
+      success: true,
+      message: 'Livraison confirmée avec succès.',
+      code: 'SUCCESS'
+    };
   } catch (error) {
-    console.error("Error confirming QR delivery:", error);
-    return false;
+    console.error("[DELIVERY] Error confirming QR delivery:", error);
+    return {
+      success: false,
+      message: 'Erreur lors de la confirmation de la livraison.',
+      code: 'SERVER_ERROR'
+    };
   }
 };

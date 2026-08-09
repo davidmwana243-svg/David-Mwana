@@ -9,7 +9,8 @@ import {
   LogOut,
   Bell,
   Search,
-  Menu
+  Menu,
+  Star
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -24,6 +25,7 @@ export const AdminLayout: React.FC = () => {
     { path: '/admin/categories', icon: Settings, label: 'Catégories' },
     { path: '/admin/orders', icon: ShoppingCart, label: 'Commandes' },
     { path: '/admin/customers', icon: Users, label: 'Clients' },
+    { path: '/admin/reviews', icon: Star, label: 'Évaluations Clients' },
   ];
 
   const clientPath = '/';

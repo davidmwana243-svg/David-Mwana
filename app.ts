@@ -14,6 +14,11 @@ import orderRoutes from './server/routes/orderRoutes';
 import aiRoutes from './server/routes/aiRoutes';
 import uploadRoutes from './server/routes/uploadRoutes';
 import paymentRoutes from './server/routes/paymentRoutes';
+import productRoutes from './server/routes/productRoutes';
+import cartRoutes from './server/routes/cartRoutes';
+import trackingRoutes from './server/routes/trackingRoutes';
+import notificationRoutes from './server/routes/notificationRoutes';
+import telegramRoutes from './server/routes/telegramRoutes';
 import { handleCallback } from './server/controllers/paymentController';
 import { setLastKnownHostUrl } from './server/utils/hostStore';
 
@@ -68,6 +73,11 @@ export async function createApp() {
   app.use('/api/ai', aiRoutes);
   app.use('/api/upload', uploadRoutes);
   app.use('/api/payment', paymentRoutes);
+  app.use('/api/products', productRoutes);
+  app.use('/api/cart', cartRoutes);
+  app.use('/api/tracking', trackingRoutes);
+  app.use('/api/notifications', notificationRoutes);
+  app.use('/api/telegram', telegramRoutes);
   app.post('/api/shwary/webhook', handleCallback);
 
   app.get('/api/health', (req, res) => {

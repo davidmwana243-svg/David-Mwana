@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { getDb } from '../firebase/index.js';
 import { Order, OrderStatus } from '../models/orderModel.js';
-import { sendOrderStatusUpdate } from '../../telegram/bot';
 
 const ORDERS_COLLECTION = 'orders';
 
@@ -134,52 +133,23 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
 
     if (status === 'shipped') {
       const orderData = orderDocSnap.data() as Order;
-      if (!orderData.qrToken) {
-         updateData.qrToken = 'SECURE-TOK-' + Math.random().toString(36).substring(2, 10).toUpperCase();
-      }
-      if (!orderData.deliveryPin) {
-         updateData.deliveryPin = Math.floor(100000 + Math.random() * 900000).toString();
+      const existingToken = orderData.secureToken || orderData.qrToken;
+      if (!existingToken) {
+        const secureToken = 'SECURE-TOK-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+        const createdAt = orderData.createdAt || Date.now();
+        const expiresAt = orderData.expiresAt || (createdAt + 30 * 24 * 60 * 60 * 1000);
+        updateData.secureToken = secureToken;
+        updateData.qrToken = secureToken;
+        updateData.deliveryPin = secureToken;
+        updateData.expiresAt = expiresAt;
+      } else {
+        updateData.secureToken = existingToken;
+        updateData.qrToken = existingToken;
+        if (!orderData.deliveryPin) updateData.deliveryPin = existingToken;
       }
     }
 
     await orderDocRef.update(updateData);
-
-    // Notify user via Telegram
-    try {
-      const orderDoc = await db.collection(ORDERS_COLLECTION).doc(id).get();
-      if (orderDoc.exists) {
-        const orderData = orderDoc.data() as Order;
-        console.log(`[DEBUG] Order found for notification: ${id}, userId: ${orderData.userId}`);
-        
-        let telegramId = '';
-        const userDoc = await db.collection('users').doc(orderData.userId).get();
-        if (userDoc.exists) {
-          const userData = userDoc.data();
-          console.log(`[DEBUG] User found for notification: ${JSON.stringify(userData)}`);
-          telegramId = userData?.telegramId || '';
-        } else {
-          console.log(`[DEBUG] User not found in Firestore for userId: ${orderData.userId}`);
-        }
-
-        // Fallback to extracting Telegram ID from userId if it starts with 'tg_'
-        if (!telegramId && orderData.userId && orderData.userId.startsWith('tg_')) {
-          telegramId = orderData.userId.replace('tg_', '');
-          console.log(`[DEBUG] Extracted fallback telegramId from userId: ${telegramId}`);
-        }
-
-        if (telegramId) {
-          console.log(`[DEBUG] Sending Telegram notification to ${telegramId}`);
-          await sendOrderStatusUpdate(telegramId, id, status as OrderStatus, trackingNumber);
-          console.log(`[DEBUG] Telegram notification sent`);
-        } else {
-          console.log(`[DEBUG] No telegramId available to notify user for order ${id}`);
-        }
-      } else {
-        console.log(`[DEBUG] Order not found for ID: ${id}`);
-      }
-    } catch (notifyError) {
-      console.error('Error sending Telegram notification for order update:', notifyError);
-    }
 
     res.json({ message: 'Order status updated successfully' });
   } catch (error: any) {
@@ -215,28 +185,6 @@ export const cancelOrder = async (req: Request, res: Response) => {
       status: 'cancelled',
       updatedAt: Date.now()
     });
-
-    // Notify user via Telegram
-    try {
-      let telegramId = '';
-      const userDoc = await db.collection('users').doc(order.userId).get();
-      if (userDoc.exists) {
-        const userData = userDoc.data();
-        telegramId = userData?.telegramId || '';
-      }
-
-      // Fallback to extracting Telegram ID from userId if it starts with 'tg_'
-      if (!telegramId && order.userId && order.userId.startsWith('tg_')) {
-        telegramId = order.userId.replace('tg_', '');
-        console.log(`[DEBUG] Extracted fallback telegramId from userId: ${telegramId}`);
-      }
-
-      if (telegramId) {
-        await sendOrderStatusUpdate(telegramId, id, 'cancelled');
-      }
-    } catch (notifyError) {
-      console.error('Error sending Telegram notification for order cancellation:', notifyError);
-    }
 
     res.json({ message: 'Order cancelled successfully' });
   } catch (error: any) {

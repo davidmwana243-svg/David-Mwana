@@ -7,7 +7,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useNotification } from '../context/NotificationContext';
-import { getProducts, getCategories, getProductsByCategory } from '../services/productService';
+import { getProducts, getCategories, getProductsByCategory, checkCartStock } from '../services/productService';
 import { createOrder, getUserOrders } from '../services/orderService';
 import { Product, Category, Order, UserAddress } from '../types';
 import { db, auth } from '../firebase';
@@ -193,6 +193,18 @@ export function TelegramMiniAppScreen() {
 
     if (!shwaryPhone) {
       showNotification("Paiement", "Veuillez renseigner un numéro de téléphone Mobile Money pour Shwary.", "error");
+      return;
+    }
+
+    // 0. Stock validation before order creation & payment
+    const stockCheck = await checkCartStock(items);
+    if (!stockCheck.valid && stockCheck.outOfStockProduct) {
+      const prod = stockCheck.outOfStockProduct;
+      showNotification(
+        "Rupture de stock", 
+        `Le produit "${prod.name}" n'est plus disponible dans cette quantité (Stock disponible: ${prod.available}).`, 
+        "error"
+      );
       return;
     }
 
@@ -838,19 +850,75 @@ export function TelegramMiniAppScreen() {
                       </div>
                     </div>
 
-                    {/* Order summary block */}
-                    <div className="border-t border-gray-100 pt-3 space-y-1.5 text-xs text-gray-500">
-                      <div className="flex justify-between">
-                        <span>Articles ({totalItems}):</span>
-                        <span>{totalPrice.toLocaleString('fr-FR')} CDF</span>
+                    {/* Order summary block & Number of pieces specification */}
+                    <div className="border-t border-gray-100 pt-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-gray-700 uppercase">
+                          📦 Récapitulatif ({totalItems} pièces)
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-bold">
+                          Précisez les pièces ci-dessous
+                        </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span>Frais de livraison:</span>
-                        <span className="text-emerald-600 font-extrabold">Gratuit / Express</span>
+
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        {items.map((item, idx) => (
+                          <div 
+                            key={`chk_${item.product.id}_${idx}`}
+                            className="bg-gray-50 p-2.5 rounded-xl border border-gray-100 flex items-center justify-between gap-2 text-xs"
+                          >
+                            <div className="w-10 h-10 rounded-lg bg-white p-0.5 border border-gray-200/60 flex-shrink-0">
+                              <img src={item.product.imageUrl} alt={item.product.name} className="w-full h-full object-contain" />
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <p className="font-extrabold text-gray-800 truncate">{item.product.name}</p>
+                              <p className="text-[10px] text-gray-400 font-bold">
+                                {(item.product.price).toLocaleString('fr-FR')} CDF / pc
+                              </p>
+                            </div>
+
+                            {/* Quantity buttons */}
+                            <div className="flex items-center space-x-1.5 bg-white px-1.5 py-1 rounded-lg border border-gray-200">
+                              <button
+                                type="button"
+                                onClick={() => updateQuantity(item.product.id, item.quantity - 1, item.selectedSize)}
+                                className="w-5 h-5 rounded bg-gray-100 flex items-center justify-center text-gray-700 active:scale-90 font-bold"
+                              >
+                                <Minus className="w-3 h-3" />
+                              </button>
+                              <span className="text-xs font-black text-gray-900 min-w-[14px] text-center">{item.quantity}</span>
+                              <button
+                                type="button"
+                                onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.selectedSize)}
+                                className="w-5 h-5 rounded bg-gray-100 flex items-center justify-center text-gray-700 active:scale-90 font-bold"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            </div>
+
+                            <div className="text-right min-w-[60px]">
+                              <span className="font-black text-[#0057FF] block text-xs">
+                                {(item.product.price * item.quantity).toLocaleString('fr-FR')} CDF
+                              </span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <div className="flex justify-between text-sm font-black text-[#002B7F] pt-1 border-t border-dashed border-gray-200">
-                        <span>Montant total:</span>
-                        <span className="text-[#0057FF]">{totalPrice.toLocaleString('fr-FR')} CDF</span>
+
+                      <div className="pt-2 border-t border-gray-100 space-y-1.5 text-xs text-gray-500">
+                        <div className="flex justify-between">
+                          <span>Sous-total articles:</span>
+                          <span className="font-bold text-gray-800">{totalPrice.toLocaleString('fr-FR')} CDF</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Frais de livraison:</span>
+                          <span className="text-emerald-600 font-extrabold">Gratuit / Express</span>
+                        </div>
+                        <div className="flex justify-between text-sm font-black text-[#002B7F] pt-1 border-t border-dashed border-gray-200">
+                          <span>Montant total:</span>
+                          <span className="text-[#0057FF]">{totalPrice.toLocaleString('fr-FR')} CDF</span>
+                        </div>
                       </div>
                     </div>
 

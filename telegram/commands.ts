@@ -3,6 +3,7 @@ import { getUserByTelegramId, saveTemporarySession, updateUserProfile } from './
 import { contactKeyboard, mainKeyboard, buildMainKeyboard } from './keyboards';
 import { getLastKnownHostUrl } from '../server/utils/hostStore';
 import { isAdmin, requireRegistration } from './middlewares';
+import { showOrders } from './menus';
 import { 
   showAdminPanel, 
   showGlobalStatistics, 
@@ -93,10 +94,23 @@ export async function handleSlashCommand(bot: TelegramBot, msg: any, command: st
       break;
 
     case '/commandes':
+    case '/mescommandes':
+    case '/orders':
+      await showOrders(bot, chatId, telegramId);
+      if (await isAdmin(telegramId)) {
+        await bot.sendMessage(
+          chatId,
+          "💡 *Conseil Admin* : Pour administrer et modifier le statut de toutes les commandes du magasin, utilisez la commande /admin_commandes ou le panneau /admin.",
+          { parse_mode: 'Markdown' }
+        );
+      }
+      break;
+
+    case '/admin_commandes':
       if (await isAdmin(telegramId)) {
         await showAdminOrders(bot, chatId);
       } else {
-        await bot.sendMessage(chatId, "❌ Non autorisé.");
+        await bot.sendMessage(chatId, "❌ Non autorisé : Vous devez être administrateur.");
       }
       break;
 

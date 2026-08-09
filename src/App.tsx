@@ -58,6 +58,7 @@ import { AdminProductsScreen } from './pages/admin/AdminProductsScreen';
 import { AdminOrdersScreen } from './pages/admin/AdminOrdersScreen';
 import { AdminCustomersScreen } from './pages/admin/AdminCustomersScreen';
 import { AdminCategoriesScreen } from './pages/admin/AdminCategoriesScreen';
+import { AdminReviewsScreen } from './pages/admin/AdminReviewsScreen';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -128,6 +129,7 @@ export default function App() {
                     <Route path="categories" element={<AdminCategoriesScreen />} />
                     <Route path="orders" element={<AdminOrdersScreen />} />
                     <Route path="customers" element={<AdminCustomersScreen />} />
+                    <Route path="reviews" element={<AdminReviewsScreen />} />
                   </Route>
 
                   {/* Public Routes - Wrapped in Layout individually for cleaner routing */}

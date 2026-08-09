@@ -20,8 +20,11 @@ export interface Product {
 
 export interface Review {
   reviewId: string;
-  productId: string;
-  customerId: string;
+  orderId?: string;
+  productId?: string;
+  userId?: string;
+  customerId?: string;
+  telegramId?: string;
   customerName: string;
   rating: number;
   comment: string;
@@ -95,13 +98,23 @@ export interface UserProfile {
 
 export interface Order {
   id: string;
+  orderId?: string;
   userId: string;
+  clientId?: string;
+  driverId?: string;
   items: CartItem[];
   total: number;
   status: 'payment_pending' | 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   shippingAddress: string;
   createdAt: number;
+  expiresAt?: number;
+  secureToken?: string;
+  signature?: string;
   qrToken?: string;
+  deliveryPin?: string;
+  deliveryConfirmed?: boolean;
+  deliveryConfirmedAt?: number;
+  deliveryConfirmedBy?: string;
   deliveredAt?: number;
   shippingAddressObj?: UserAddress;
   userName?: string;

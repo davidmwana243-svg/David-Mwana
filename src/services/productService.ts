@@ -216,3 +216,39 @@ export const addProductReview = async (productId: string, userId: string, userNa
   
   return review as ProductReview;
 };
+
+export interface StockCheckResult {
+  valid: boolean;
+  outOfStockProduct?: {
+    name: string;
+    requested: number;
+    available: number;
+  };
+}
+
+export const checkCartStock = async (items: Array<{ product: { id: string; name: string }; quantity: number }>): Promise<StockCheckResult> => {
+  try {
+    for (const item of items) {
+      if (!item.product || !item.product.id) continue;
+      const docRef = doc(db, 'products', item.product.id);
+      const snapshot = await getDoc(docRef);
+      if (snapshot.exists()) {
+        const data = snapshot.data() as Product;
+        const availableStock = typeof data.stock === 'number' ? data.stock : 999;
+        if (item.quantity > availableStock) {
+          return {
+            valid: false,
+            outOfStockProduct: {
+              name: data.name || item.product.name,
+              requested: item.quantity,
+              available: availableStock
+            }
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Stock check error:', err);
+  }
+  return { valid: true };
+};

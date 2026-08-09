@@ -1,6 +1,7 @@
 import { getDb } from '../server/firebase/index';
 import { generateOrderNumber } from './utils';
 import TelegramBot from 'node-telegram-bot-api';
+import { generateDeliveryQRPayload, generateSecureToken } from '../src/utils/deliveryCrypto';
 
 /**
  * Service Firestore pour le Bot Telegram DavidStore
@@ -106,20 +107,38 @@ export async function updateUserProfile(id: string, updates: any): Promise<void>
 
 // --- CATALOGUE ET PRODUITS ---
 
-export async function getCategories(): Promise<any[]> {
+export async function getCategories(onlyAvailableWithProducts: boolean = true): Promise<any[]> {
   const db = getDb();
   const snap = await db.collection(CATEGORIES_COL).get();
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const categories = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+  if (onlyAvailableWithProducts) {
+    const availableProducts = await getProducts(undefined, true);
+    const availableCategoryIds = new Set(availableProducts.map((p: any) => p.category));
+    return categories.filter((c: any) => availableCategoryIds.has(c.id));
+  }
+
+  return categories;
 }
 
-export async function getProducts(categoryId?: string): Promise<any[]> {
+export async function getProducts(categoryId?: string, onlyAvailable: boolean = true): Promise<any[]> {
   const db = getDb();
   let query: any = db.collection(PRODUCTS_COL);
   if (categoryId) {
     query = query.where('category', '==', categoryId);
   }
   const snap = await query.get();
-  return snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+  let products = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+
+  if (onlyAvailable) {
+    products = products.filter((p: any) => {
+      const stockNum = p.stock !== undefined && p.stock !== null ? Number(p.stock) : 0;
+      const isInStockFlag = p.inStock !== false;
+      return stockNum > 0 && isInStockFlag;
+    });
+  }
+
+  return products;
 }
 
 export async function getProductById(productId: string): Promise<any | null> {
@@ -268,13 +287,32 @@ export async function createOrder(telegramId: string, orderData: any): Promise<s
   const db = getDb();
   const orderId = generateOrderNumber();
   const docRef = db.collection(ORDERS_COL).doc(orderId);
+
+  const createdAt = Date.now();
+  const expiresAt = createdAt + 30 * 24 * 60 * 60 * 1000;
+  const secureToken = orderData.secureToken || orderData.deliveryPin || generateSecureToken();
+
+  const { payloadObj } = generateDeliveryQRPayload({
+    id: orderId,
+    secureToken,
+    createdAt,
+    expiresAt,
+    userId: orderData.userId || `tg_${telegramId}`
+  } as any, orderData.driverId || '', orderData.userId || `tg_${telegramId}`);
   
   await docRef.set({
     ...orderData,
     id: orderId,
-    status: 'payment_pending',
-    createdAt: Date.now(),
-    updatedAt: Date.now()
+    orderId,
+    status: orderData.status || 'payment_pending',
+    createdAt,
+    updatedAt: createdAt,
+    secureToken,
+    qrToken: secureToken,
+    deliveryPin: secureToken,
+    signature: payloadObj.signature,
+    expiresAt,
+    deliveryConfirmed: false
   });
   
   return orderId;

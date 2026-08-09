@@ -42,9 +42,9 @@ export async function showMainMenu(bot: TelegramBot, chatId: number, text?: stri
 
 export async function showCatalogue(bot: TelegramBot, chatId: number) {
   try {
-    const categories = await getCategories();
+    const categories = await getCategories(true);
     if (categories.length === 0) {
-      await bot.sendMessage(chatId, "🛍️ Notre catalogue de catégories est actuellement vide.");
+      await bot.sendMessage(chatId, "🛍️ Aucun produit n'est disponible en stock pour le moment dans notre catalogue.");
       return;
     }
 
@@ -67,13 +67,13 @@ export async function showCatalogue(bot: TelegramBot, chatId: number) {
 
 export async function showCategoryProducts(bot: TelegramBot, chatId: number, categoryId: string) {
   try {
-    const products = await getProducts(categoryId);
+    const products = await getProducts(categoryId, true);
     if (products.length === 0) {
-      await bot.sendMessage(chatId, " Aucun produit n'est disponible dans cette catégorie pour le moment.");
+      await bot.sendMessage(chatId, "🛍️ Aucun produit n'est disponible dans cette catégorie pour le moment.");
       return;
     }
 
-    await bot.sendMessage(chatId, ` Produits trouvés : *${products.length}*. Chargement des fiches articles...`, { parse_mode: 'Markdown' });
+    await bot.sendMessage(chatId, `📦 Produits disponibles : *${products.length}*. Chargement des fiches articles...`, { parse_mode: 'Markdown' });
 
     for (const p of products) {
       let text = `🔹 *${p.name}*\n\n` +
